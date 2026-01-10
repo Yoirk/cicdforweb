@@ -1,0 +1,26 @@
+name: Test SSH Connection
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  test-connection:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Execute SSH commands
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: 22
+        script: |
+          echo "==== KET NOI THANH CONG! ===="
+          whoami
+          docker --version
+          docker compose version
+          echo "==== HOAN TAT KIEM TRA ===="
