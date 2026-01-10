@@ -1,26 +1,45 @@
-name: Test SSH Connection
+name: Deploy to VPS
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
 
 jobs:
-  test-connection:
+  deploy:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Execute SSH commands
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.VPS_HOST }}
-        username: ${{ secrets.VPS_USER }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
-        port: 22
-        script: |
-          echo "==== KET NOI THANH CONG! ===="
-          whoami
-          docker --version
-          docker compose version
-          echo "==== HOAN TAT KIEM TRA ===="
+      # Bước 1: Copy file từ GitHub sang VPS
+      - name: Copy files to VPS via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          # Copy các file/folder cần thiết
+          source: "docker-compose.yml,html"
+          # Thư mục đích trên VPS
+          target: "/root/my-app"
+
+      # Bước 2: SSH vào VPS để chạy Docker Compose
+      - name: Execute remote commands via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # Di chuyển vào thư mục dự án
+            cd /root/my-app
+            
+            # Tắt container cũ (nếu có) để cập nhật config mới
+            docker compose down
+            
+            # Kích hoạt container mới ở chế độ detached (chạy ngầm)
+            docker compose up -d
+            
+            # Kiểm tra trạng thái container sau khi chạy
+            docker compose ps
