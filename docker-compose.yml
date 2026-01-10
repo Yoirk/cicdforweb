@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  web:
+    image: nginx:alpine
+    container_name: my-web-app
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      # Map thư mục html từ máy chủ (host) vào thư mục web của Nginx trong container
+      - ./html:/usr/share/nginx/html
