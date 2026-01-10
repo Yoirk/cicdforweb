@@ -20,7 +20,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           # Copy các file/folder cần thiết
-          source: "docker-compose.yml,html"
+          source: "docker-compose.yml,html,nginx"
           # Thư mục đích trên VPS
           target: "/root/my-app"
 
@@ -31,6 +31,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
           script: |
             # Di chuyển vào thư mục dự án
             cd /root/my-app

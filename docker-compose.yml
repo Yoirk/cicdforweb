@@ -8,5 +8,8 @@ services:
     ports:
       - "80:80"
     volumes:
-      # Map thư mục html từ máy chủ (host) vào thư mục web của Nginx trong container
+      # Map thư mục chứa mã nguồn web
       - ./html:/usr/share/nginx/html
+      
+      # Map file cấu hình Nginx để nhận diện tên miền wanderingtomes.site
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
