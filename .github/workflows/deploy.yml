@@ -2,163 +2,145 @@ name: DevSecOps Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
   pull_request:
-    branches:
-      - main
+    branches: [ "main" ]
+
+env:
+  REGISTRY: ghcr.io
+  # Tên Image theo format: owner/repo (viết thường)
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  # --- JOB 1: BẢO MẬT (TRIVY) ---
+  # 1. QUÉT BẢO MẬT MÃ NGUỒN (SAST)
   security-scan:
-    name: Trivy Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Quét lỗ hổng trong source code và thư viện
+      - name: Run Trivy FS Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          trivy-config: trivy.yaml # Nếu có
+          severity: 'CRITICAL,HIGH'
+
+      # Tạo SBOM cho file system
+      - name: Generate SBOM (Syft)
+        uses: anchors/syft-action@v0.1.0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom-fs.cyclonedx.json
+      
+      # Lưu SBOM làm artifact
+      - name: Upload SBOM Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-fs
+          path: sbom-fs.cyclonedx.json
+
+  # 2. BUILD IMAGE & ĐẨY LÊN REGISTRY
+  build-and-push:
+    needs: security-scan # Chỉ chạy nếu scan code OK
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      security-events: write
+      packages: write # Cần quyền để push lên GHCR
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 1. Quét File System
-      - name: Run Trivy scanner (FS)
-        run: |
-          sudo apt-get update && sudo apt-get install -y wget
-          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
-          sudo apt-get update && sudo apt-get install -y trivy
-          trivy fs . --severity CRITICAL,HIGH --exit-code 1
-
-      # 2. Quét Docker Image
-      - name: Run Trivy scanner (Image)
-        run: |
-          trivy image nginx:1.26.3-alpine --severity CRITICAL,HIGH --format sarif --output trivy-results.sarif || true
-
-      # 3. Upload báo cáo
-      - name: Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@v4
-        if: always()
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
         with:
-          sarif_file: 'trivy-results.sarif'
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 4. Generate SBOMs for filesystem and image using Syft CLI
-      - name: Install Syft
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Generate SBOM (filesystem) with Syft
-        run: syft . -o cyclonedx-json > sbom-fs.cyclonedx.json
-
-      - name: Generate SBOM (image) with Syft
-        run: syft nginx:1.26.3-alpine -o cyclonedx-json > sbom-image.cyclonedx.json
-
-      - name: Upload SBOM artifacts
-        uses: actions/upload-artifact@v4
+      # Build và Push Image
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
         with:
-          name: sbom-artifacts
-          path: |
-            sbom-fs.cyclonedx.json
-            sbom-image.cyclonedx.json
+          context: .
+          push: true
+          # Tag theo latest và commit hash để dễ rollback
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
-  # --- JOB 2: DEPLOY ---
+  # 3. DEPLOY LÊN VPS (CẬP NHẬT)
   deploy:
-    name: Deploy to VPS
-    needs: security-scan # Chờ Job 1 xong mới chạy
+    needs: build-and-push
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Copy files to VPS via SCP
-        uses: appleboy/scp-action@v0.1.7
+      # Copy file docker-compose.yml mới nhất lên VPS
+      - name: Copy docker-compose via SCP
+        uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "docker-compose.yml,html,nginx,certs"
-          target: "/root/my-app"
+          source: "docker-compose.yml"
+          target: "/root/my-app/"
 
-      - name: Execute remote commands via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      # SSH vào VPS để pull image và restart container
+      - name: Execute remote deploy
+        uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script_stop: true
           script: |
             cd /root/my-app
             
-            # Check if Let's Encrypt certificates exist
-            if [ ! -f "/etc/letsencrypt/live/wanderingtomes.site/fullchain.pem" ] || [ ! -f "/etc/letsencrypt/live/wanderingtomes.site/privkey.pem" ]; then
-              echo "ERROR: Let's Encrypt certificates not found!"
-              echo "Please generate certificates on VPS using:"
-              echo "  certbot certonly --standalone -d wanderingtomes.site -d www.wanderingtomes.site"
-              exit 1
-            fi
+            # Pull image mới nhất về 
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             
-            # Fix permissions so nginx user (101) can read certificates
-            echo "Setting certificate permissions for nginx user..."
-            chmod 755 /etc/letsencrypt
-            chmod 755 /etc/letsencrypt/live
-            chmod 755 /etc/letsencrypt/live/wanderingtomes.site
-            chmod 644 /etc/letsencrypt/live/wanderingtomes.site/fullchain.pem
-            chmod 644 /etc/letsencrypt/live/wanderingtomes.site/privkey.pem
-            
-            echo "Certificate permissions verified"
-            
-            # Restart containers
-            echo ""
-            echo "Restarting Docker containers..."
+            # Restart container
             docker compose down
             docker compose up -d
-            docker compose ps
+            
+            # Dọn dẹp image cũ
+            docker image prune -f
 
-  # --- JOB 3: DAST SCAN (ZAP) ---
+  # 4. QUÉT BẢO MẬT ĐỘNG (DAST)
   dast-scan:
-    name: OWASP ZAP Scan
-    needs: deploy # Chờ Job 2 xong mới chạy
+    needs: deploy
     runs-on: ubuntu-latest
     steps:
-      - name: ZAP Scan
-        uses: zaproxy/action-baseline@v0.14.0
+      - name: OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.11.0
         with:
-          target: 'https://wanderingtomes.site'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          docker_name: 'owasp/zap2docker-stable'
+          target: 'https://wanderingtomes.site' # Domain của bạn
           rules_file_name: '.zap/rules.tsv'
           cmd_options: '-a'
-          allow_issue_writing: false
-          fail_action: false
-          artifact_name: 'zap-scan-report'
+          allow_issue_writing: false # Tắt tạo issue nếu không muốn spam
 
-  # --- JOB 4: NOTIFICATION (DISCORD ONLY) ---
+  # 5. THÔNG BÁO (DISCORD)
   notify:
-    name: Discord Notification
+    if: always() # Luôn chạy dù thành công hay thất bại
+    needs: [security-scan, build-and-push, deploy, dast-scan]
     runs-on: ubuntu-latest
-    if: always() # Luôn chạy dù các bước trên có lỗi
-    needs: [security-scan, deploy, dast-scan] # Theo dõi trạng thái cả 3 Job
     steps:
       - name: Send Discord Notification
-        if: always()
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          SECURITY_RESULT: ${{ needs.security-scan.result }}
-          DEPLOY_RESULT: ${{ needs.deploy.result }}
-          DAST_RESULT: ${{ needs.dast-scan.result }}
-        run: |
-          curl -X POST "$DISCORD_WEBHOOK" \
-            -H 'Content-Type: application/json' \
-            -d @- << 'CURL_EOF'
-          {
-            "embeds": [{
-              "title": " DevSecOps Status Report",
-              "fields": [
-                { "name": "Project", "value": "${{ github.repository }}", "inline": true },
-                { "name": "Branch", "value": "${{ github.ref_name }}", "inline": true },
-                { "name": "Security Scan", "value": "${{ needs.security-scan.result }}", "inline": true },
-                { "name": "Deployment", "value": "${{ needs.deploy.result }}", "inline": true },
-                { "name": "DAST Scan", "value": "${{ needs.dast-scan.result }}", "inline": true },
-                { "name": "Details", "value": "[View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})", "inline": false }
-              ],
-              "color": 3066993
-            }]
-          }
-          CURL_EOF
+        uses: nobrayner/discord-webhook@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
+          title: "CI/CD Pipeline Status"
+          description: "Build & Deploy cho commit ${{ github.sha }} đã hoàn tất."
+          color-success: '#2eb886'
+          color-failure: '#ff0000'

@@ -1,23 +1,22 @@
-version: '3.8'
-
 services:
   web:
-    image: nginx:1.26.3-alpine
+    # 1. Thay vì dùng image gốc, ta dùng Image của chính mình trên GHCR
+    # ${IMAGE_TAG} sẽ được truyền vào khi chạy lệnh deploy
+    image: ghcr.io/Yoirk/cicdforweb:latest
+    
     container_name: my-web-app
     restart: always
     ports:
       - "80:80"
       - "443:443"
+    
     volumes:
-      - ./html:/usr/share/nginx/html:ro
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       
       - type: tmpfs
         target: /tmp
         tmpfs:
           mode: 01777
-
       - type: tmpfs
         target: /var/run
         tmpfs:
