@@ -9,7 +9,7 @@ on:
 env:
   REGISTRY: ghcr.io
   # Tên Image theo format: owner/repo (viết thường)
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: yoirk/cicdforweb
 
 jobs:
   # 1. QUÉT BẢO MẬT MÃ NGUỒN (SAST)
