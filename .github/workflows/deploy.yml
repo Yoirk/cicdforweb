@@ -30,7 +30,7 @@ jobs:
 
       # Tạo SBOM cho file system
       - name: Generate SBOM (Syft)
-        uses: anchors/syft-action@v0.1.0
+        uses: anchore/sbom-action@v0
         with:
           path: .
           format: cyclonedx-json
@@ -131,7 +131,7 @@ jobs:
 
   # 5. THÔNG BÁO (DISCORD)
   notify:
-    if: always() # Luôn chạy dù thành công hay thất bại
+    if: always()
     needs: [security-scan, build-and-push, deploy, dast-scan]
     runs-on: ubuntu-latest
     steps:
@@ -139,7 +139,7 @@ jobs:
         uses: nobrayner/discord-webhook@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
+          discord-webhook: ${{ secrets.DISCORD_WEBHOOK }}
           title: "CI/CD Pipeline Status"
           description: "Build & Deploy cho commit ${{ github.sha }} đã hoàn tất."
           color-success: '#2eb886'
