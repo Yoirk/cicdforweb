@@ -88,19 +88,34 @@ jobs:
           script: |
             cd /root/my-app
             
+            # Check if Let's Encrypt certificates exist
+            if [ ! -f "/etc/letsencrypt/live/wanderingtomes.site/fullchain.pem" ] || [ ! -f "/etc/letsencrypt/live/wanderingtomes.site/privkey.pem" ]; then
+              echo "ERROR: Let's Encrypt certificates not found!"
+              echo "Please generate certificates on VPS using:"
+              echo "  certbot certonly --standalone -d wanderingtomes.site -d www.wanderingtomes.site"
+              exit 1
+            fi
+            
             # Copy certificates from Let's Encrypt to app directory
-            echo "Copying certificates from /etc/letsencrypt/..."
+            echo "Copying Let's Encrypt certificates to app directory..."
             mkdir -p certs/live/wanderingtomes.site
             cp /etc/letsencrypt/live/wanderingtomes.site/fullchain.pem certs/live/wanderingtomes.site/
             cp /etc/letsencrypt/live/wanderingtomes.site/privkey.pem certs/live/wanderingtomes.site/
             
-            # Set proper permissions
+            # Set proper permissions (644 for public cert, 600 for private key)
             chmod 644 certs/live/wanderingtomes.site/fullchain.pem
             chmod 600 certs/live/wanderingtomes.site/privkey.pem
             
-            echo "Certificates copied successfully"
+            echo " Let's Encrypt certificates copied successfully"
+            
+            # Verify certificates
+            echo ""
+            echo "Certificate verification:"
+            ls -la certs/live/wanderingtomes.site/
             
             # Restart containers
+            echo ""
+            echo "Restarting Docker containers..."
             docker compose down
             docker compose up -d
             docker compose ps

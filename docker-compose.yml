@@ -11,8 +11,19 @@ services:
     volumes:
       - ./html:/usr/share/nginx/html:ro
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      
+      # 1. Map trực tiếp thư mục chứng chỉ thật của VPS vào container
       - /etc/letsencrypt:/etc/letsencrypt:ro
+      
+      - type: tmpfs
+        target: /var/cache/nginx
+        tmpfs:
+          mode: 1777
+          
+      - type: tmpfs
+        target: /var/run
+        tmpfs:
+          mode: 1777
+          
     user: "101"
     read_only: true
-    tmpfs:
-      - /var/cache/nginx
