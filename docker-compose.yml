@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   web:
     image: nginx:1.26.3-alpine
@@ -9,21 +11,17 @@ services:
     volumes:
       - ./html:/usr/share/nginx/html:ro
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      
-      # Map chứng chỉ SSL
       - /etc/letsencrypt:/etc/letsencrypt:ro
       
-      # Mount tmpfs vào /tmp để chứa các file temp của Nginx
       - type: tmpfs
         target: /tmp
         tmpfs:
-          mode: 1777
+          mode: "1777"
           
-      # Giữ nguyên /var/run cho PID file (Nginx mặc định ghi PID vào đây)
       - type: tmpfs
         target: /var/run
         tmpfs:
-          mode: 1777
+          mode: "1777"
           
     user: "101"
     read_only: true
