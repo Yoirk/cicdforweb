@@ -145,7 +145,7 @@ jobs:
         run: chmod -R 777 .
 
       - name: OWASP ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.11.0
+        uses: zaproxy/action-baseline@v0.14.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           docker_name: 'zaproxy/zap-stable'
