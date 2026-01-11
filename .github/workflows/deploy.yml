@@ -75,7 +75,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "docker-compose.yml,html,nginx"
+          source: "docker-compose.yml,html,nginx,certs"
           target: "/root/my-app"
 
       - name: Execute remote commands via SSH
@@ -87,6 +87,20 @@ jobs:
           script_stop: true
           script: |
             cd /root/my-app
+            
+            # Copy certificates from Let's Encrypt to app directory
+            echo "Copying certificates from /etc/letsencrypt/..."
+            mkdir -p certs/live/wanderingtomes.site
+            cp /etc/letsencrypt/live/wanderingtomes.site/fullchain.pem certs/live/wanderingtomes.site/
+            cp /etc/letsencrypt/live/wanderingtomes.site/privkey.pem certs/live/wanderingtomes.site/
+            
+            # Set proper permissions
+            chmod 644 certs/live/wanderingtomes.site/fullchain.pem
+            chmod 600 certs/live/wanderingtomes.site/privkey.pem
+            
+            echo "Certificates copied successfully"
+            
+            # Restart containers
             docker compose down
             docker compose up -d
             docker compose ps

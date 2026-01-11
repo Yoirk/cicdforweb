@@ -45,7 +45,29 @@ cicdforweb/
 - **Temporary Filesystem:** In-memory tmpfs for `/var/cache/nginx`
 - **Resource Isolation:** No unbounded resource limits (optional to add)
 
-### 2. **Static Application Security (SAST)**
+### 2. **SSL/TLS Certificates**
+- **Certificate Provider:** Let's Encrypt (via Certbot)
+- **Location on VPS:** `/etc/letsencrypt/live/wanderingtomes.site/`
+- **Deployment Process:** Certificates automatically copied to `/root/my-app/certs/` during pipeline
+- **Renewal:** Certbot auto-renewal configured (every 60 days)
+- **Post-Renewal Hook:** Automatically syncs certificates and restarts nginx container
+
+   **Manual certificate renewal:**
+   ```bash
+   # On VPS
+   certbot renew
+   # Post-renewal hook automatically copies certificates and restarts nginx
+   ```
+
+   **Initial certificate setup (if needed):**
+   ```bash
+   # On VPS
+   apt install -y certbot
+   docker compose down
+   certbot certonly --standalone -d wanderingtomes.site -d www.wanderingtomes.site --email your-email@example.com --agree-tos
+   ```
+
+### 3. **Static Application Security (SAST)**
 - **Trivy Filesystem Scan:** Scans for vulnerabilities in dependencies and code
 - **Trivy Image Scan:** Scans base image for known CVEs
 - **Severity Filter:** Only CRITICAL and HIGH severity issues

@@ -1,0 +1,8 @@
+# Ignore certificate files (security: don't commit private keys)
+*.pem
+*.key
+*.crt
+*.cer
+
+# But keep the directory structure with .gitkeep
+!.gitkeep
