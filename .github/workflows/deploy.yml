@@ -90,10 +90,10 @@ jobs:
             # 2. Pull new image
             docker pull ghcr.io/yoirk/cicdforweb:latest
             
-            # 3. Verify Signature (OIDC)
-            # Check Issuer and Identity (Repo owner/name)
+            # 3. Verify Signature (FIXED CASE SENSITIVITY)
+            # Su dung [Yy]oirk de chap nhan ca chu hoa va thuong
             if cosign verify \
-              --certificate-identity-regexp "^https://github.com/yoirk/cicdforweb/.*" \
+              --certificate-identity-regexp "^https://github.com/[Yy]oirk/cicdforweb/.*" \
               --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
               ghcr.io/yoirk/cicdforweb:latest; then
               
@@ -104,7 +104,7 @@ jobs:
               exit 1
             fi
             
-            # 4. Set SSL permissions (FIXED LOGIC)
+            # 4. Set SSL permissions
             echo "Setting certificate permissions..."
             chmod 755 /etc/letsencrypt
             chmod 755 /etc/letsencrypt/live
