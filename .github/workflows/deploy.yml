@@ -46,12 +46,12 @@ jobs:
 
       # 3. Upload báo cáo lỗi lên GitHub
       - name: Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
 
-  # --- JOB 2: DEPLOY (CẬP NHẬT ĐIỀU KIỆN) ---
+  # --- JOB 2: DEPLOY ---
   deploy:
     name: Deploy to VPS
     needs: security-scan # Chỉ deploy khi scan an toàn
@@ -83,3 +83,18 @@ jobs:
             docker compose down
             docker compose up -d
             docker compose ps
+    
+  # JOB 3: DAST SCAN (Quét động sau khi Deploy)
+  dast-scan:
+    name: OWASP ZAP Scan
+    needs: deploy # Chỉ chạy sau khi đã Deploy thành công
+    runs-on: ubuntu-latest
+    steps:
+      - name: ZAP Scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: 'https://wanderingtomes.site' # Target website đã deploy
+          rules_file_name: '.zap/rules.tsv' # (Tùy chọn) File cấu hình luật quét
+          cmd_options: '-a' # Bao gồm cả Ajax Spider (quét sâu hơn)
+          allow_issue_writing: false # Không tự tạo issue trên GitHub (để tránh spam)
+          fail_action: false # KHÔNG fail pipeline nếu tìm thấy lỗi (chỉ cảnh báo)
