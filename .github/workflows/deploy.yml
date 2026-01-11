@@ -1,30 +1,76 @@
-name: Deploy to VPS
+name: DevSecOps Pipeline
 
 on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
+  # --- JOB 1: BẢO MẬT ---
+  security-scan:
+    name: Trivy Security Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 1. Quét File System (Code & Config)
+      - name: Run Trivy scanner (FS)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          hide-progress: false
+          format: 'table'
+          exit-code: '1' # Chặn pipeline nếu có lỗi
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+
+      # 2. Quét Docker Image
+      - name: Run Trivy scanner (Image)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: 'nginx:alpine'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          exit-code: '1' # Chặn pipeline nếu có lỗi
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+
+      # 3. Upload báo cáo lỗi lên GitHub
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # --- JOB 2: DEPLOY (CẬP NHẬT ĐIỀU KIỆN) ---
   deploy:
+    name: Deploy to VPS
+    needs: security-scan # Chỉ deploy khi scan an toàn
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Bước 1: Copy file từ GitHub sang VPS
+      # Bước Copy
       - name: Copy files to VPS via SCP
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          # Copy các file/folder cần thiết
           source: "docker-compose.yml,html,nginx"
-          # Thư mục đích trên VPS
-          target: "/root/my-app"
+          target: "/root/my-app" 
 
-      # Bước 2: SSH vào VPS để chạy Docker Compose
+      # Bước SSH
       - name: Execute remote commands via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -33,14 +79,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script_stop: true
           script: |
-            # Di chuyển vào thư mục dự án
             cd /root/my-app
-            
-            # Tắt container cũ (nếu có) để cập nhật config mới
             docker compose down
-            
-            # Kích hoạt container mới ở chế độ detached (chạy ngầm)
             docker compose up -d
-            
-            # Kiểm tra trạng thái container sau khi chạy
             docker compose ps
