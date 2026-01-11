@@ -16,12 +16,12 @@ services:
       - type: tmpfs
         target: /tmp
         tmpfs:
-          mode: "1777"
-          
+          mode: 01777
+
       - type: tmpfs
         target: /var/run
         tmpfs:
-          mode: "1777"
+          mode: 01777
           
     user: "101"
     read_only: true
