@@ -135,15 +135,24 @@ jobs:
     needs: deploy
     runs-on: ubuntu-latest
     steps:
+      # Phải Checkout code thì mới có file .zap/rules.tsv để đọc
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Cấp quyền ghi (777) cho thư mục hiện tại trước khi chạy ZAP
+      # Điều này giúp user bên trong container (UID 1000) có thể ghi file báo cáo ra ngoài
+      - name: Fix permissions for ZAP container
+        run: chmod -R 777 .
+
       - name: OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.11.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           docker_name: 'zaproxy/zap-stable'
-          target: 'https://wanderingtomes.site' # Domain của website
+          target: 'https://wanderingtomes.site'
           rules_file_name: '.zap/rules.tsv'
-          cmd_options: '-a -u 0'
-          allow_issue_writing: false # Tắt tạo issue nếu không muốn spam
+          cmd_options: '-a' 
+          allow_issue_writing: false
 
   # 5. THÔNG BÁO (DISCORD)
   notify:
