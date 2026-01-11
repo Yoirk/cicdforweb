@@ -76,7 +76,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
-  # 3. DEPLOY LÊN VPS (CẬP NHẬT)
+  # 3. DEPLOY LÊN VPS 
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
@@ -123,8 +123,8 @@ jobs:
         uses: zaproxy/action-baseline@v0.11.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          docker_name: 'owasp/zap2docker-stable'
-          target: 'https://wanderingtomes.site' # Domain của bạn
+          docker_name: 'zaproxy/zap-stable'
+          target: 'https://wanderingtomes.site' # Domain của website
           rules_file_name: '.zap/rules.tsv'
           cmd_options: '-a'
           allow_issue_writing: false # Tắt tạo issue nếu không muốn spam
