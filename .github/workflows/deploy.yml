@@ -9,12 +9,13 @@ on:
 permissions:
   contents: read
   packages: write
-  id-token: write # Bat buoc cho OIDC signing
+  id-token: write
   security-events: write
-  issues: write         # Cần cho ZAP tạo issue báo lỗi
-  pull-requests: write  # Cần cho ZAP comment trên PR
+  issues: write
+  pull-requests: write
 
 jobs:
+  # 1. Job quet lo hong (Trivy)
   security-scan:
     runs-on: ubuntu-latest
     steps:
@@ -37,8 +38,26 @@ jobs:
         with:
           sarif_file: 'trivy-fs-results.sarif'
 
+  # 2. Quet Secret (TruffleHog)
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Lay toan bo lich su commit de quet
+
+      - name: TruffleHog OSS
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --debug --only-verified
+
+  # 3. Build & Sign
   build-push-sign:
-    needs: security-scan
+    needs: [security-scan, secret-scan]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -69,6 +88,7 @@ jobs:
           cosign sign --yes ghcr.io/yoirk/cicdforweb:${{ github.sha }}
           cosign sign --yes ghcr.io/yoirk/cicdforweb:latest
 
+  # 4. Deploy 
   deploy:
     needs: build-push-sign
     runs-on: ubuntu-latest
@@ -80,7 +100,6 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            # 1. Install Cosign if missing
             if ! command -v cosign &> /dev/null; then
                 wget "https://github.com/sigstore/cosign/releases/download/v2.2.3/cosign-linux-amd64"
                 mv cosign-linux-amd64 /usr/local/bin/cosign
@@ -88,45 +107,34 @@ jobs:
             fi
 
             cd /root/my-app
-            
-            # 2. Pull new image
             docker pull ghcr.io/yoirk/cicdforweb:latest
             
-            # 3. Verify Signature (FIXED CASE SENSITIVITY)
-            # Su dung [Yy]oirk de chap nhan ca chu hoa va thuong
+            # Verify Signature
             if cosign verify \
               --certificate-identity-regexp "^https://github.com/[Yy]oirk/cicdforweb/.*" \
               --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
               ghcr.io/yoirk/cicdforweb:latest; then
-              
               echo "Signature Verified. Deploying..."
-              
             else
               echo "SECURITY ALERT: Signature verification failed."
               exit 1
             fi
             
-            # 4. Set SSL permissions
-            echo "Setting certificate permissions..."
+            # Set permissions
             chmod 755 /etc/letsencrypt
             chmod 755 /etc/letsencrypt/live
             chmod 755 /etc/letsencrypt/archive
-            
-            # Domain specific permissions
             chmod 755 /etc/letsencrypt/live/wanderingtomes.site
             chmod 755 /etc/letsencrypt/archive/wanderingtomes.site
-            
-            # File specific permissions
             chmod 644 /etc/letsencrypt/live/wanderingtomes.site/fullchain.pem
             chmod 644 /etc/letsencrypt/live/wanderingtomes.site/privkey.pem
             
-            # 5. Restart container
+            # Restart
             docker compose down
             docker compose up -d
-            
-            # 6. Cleanup
             docker image prune -f
 
+  # 5. DAST Scan 
   dast-scan:
     needs: deploy
     runs-on: ubuntu-latest
@@ -144,10 +152,11 @@ jobs:
           rules_file_name: '.zap/rules.tsv'
           cmd_options: '-a'
 
+  # 6. Notify Discord
   notify:
-    needs: [security-scan, build-push-sign, deploy, dast-scan]
+    needs: [security-scan, secret-scan, build-push-sign, deploy, dast-scan]
     runs-on: ubuntu-latest
-    if: always() # Luon chay de bao cao ket qua
+    if: always()
     steps:
       - name: Discord Notification
         uses: sarisia/actions-status-discord@v1
@@ -155,6 +164,6 @@ jobs:
           webhook: ${{ secrets.DISCORD_WEBHOOK }}
           status: ${{ contains(needs.*.result, 'failure') && 'failure' || 'success' }}
           title: "DevSecOps Pipeline Status"
-          description: "Build, Sign, Deploy & Scan completed."
+          description: "Full pipeline with Secret Scanning completed."
           color: 0x0000ff
           url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
