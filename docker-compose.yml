@@ -2,7 +2,7 @@ services:
   web:
     # 1. Thay vì dùng image gốc, ta dùng Image của chính mình trên GHCR
     # ${IMAGE_TAG} sẽ được truyền vào khi chạy lệnh deploy
-    image: ghcr.io/Yoirk/cicdforweb:latest
+    image: ghcr.io/yoirk/cicdforweb:latest
     
     container_name: my-web-app
     restart: always
