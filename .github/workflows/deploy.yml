@@ -9,7 +9,7 @@ on:
       - main
 
 jobs:
-  # --- JOB 1: BẢO MẬT ---
+  # --- JOB 1: BẢO MẬT (TRIVY) ---
   security-scan:
     name: Trivy Security Scan
     runs-on: ubuntu-latest
@@ -20,7 +20,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 1. Quét File System (Code & Config)
+      # 1. Quét File System
       - name: Run Trivy scanner (FS)
         uses: aquasecurity/trivy-action@master
         with:
@@ -28,7 +28,7 @@ jobs:
           scan-ref: '.'
           hide-progress: false
           format: 'table'
-          exit-code: '1' # Chặn pipeline nếu có lỗi
+          exit-code: '1'
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
 
@@ -40,11 +40,11 @@ jobs:
           image-ref: 'nginx:alpine'
           format: 'sarif'
           output: 'trivy-results.sarif'
-          exit-code: '1' # Chặn pipeline nếu có lỗi
+          exit-code: '1'
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
 
-      # 3. Upload báo cáo lỗi lên GitHub
+      # 3. Upload báo cáo
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v4
         if: always()
@@ -54,13 +54,12 @@ jobs:
   # --- JOB 2: DEPLOY ---
   deploy:
     name: Deploy to VPS
-    needs: security-scan # Chỉ deploy khi scan an toàn
+    needs: security-scan # Chờ Job 1 xong mới chạy
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Bước Copy
       - name: Copy files to VPS via SCP
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -68,9 +67,8 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "docker-compose.yml,html,nginx"
-          target: "/root/my-app" 
+          target: "/root/my-app"
 
-      # Bước SSH
       - name: Execute remote commands via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -83,19 +81,43 @@ jobs:
             docker compose down
             docker compose up -d
             docker compose ps
-    
-  # JOB 3: DAST SCAN (Quét động sau khi Deploy)
+
+  # --- JOB 3: DAST SCAN (ZAP) ---
   dast-scan:
     name: OWASP ZAP Scan
-    needs: deploy # Chỉ chạy sau khi đã Deploy thành công
+    needs: deploy # Chờ Job 2 xong mới chạy
     runs-on: ubuntu-latest
     steps:
       - name: ZAP Scan
         uses: zaproxy/action-baseline@v0.14.0
         with:
-          target: 'https://wanderingtomes.site' # Target website đã deploy
-          rules_file_name: '.zap/rules.tsv' # (Tùy chọn) File cấu hình luật quét
-          cmd_options: '-a' # Bao gồm cả Ajax Spider (quét sâu hơn)
-          allow_issue_writing: false # Không tự tạo issue trên GitHub (để tránh spam)
-          fail_action: false # KHÔNG fail pipeline nếu tìm thấy lỗi (chỉ cảnh báo)
+          target: 'https://wanderingtomes.site'
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a'
+          allow_issue_writing: false
+          fail_action: false
           artifact_name: 'zap-scan-report'
+
+  # --- JOB 4: NOTIFICATION (DISCORD ONLY) ---
+  notify:
+    name: Discord Notification
+    runs-on: ubuntu-latest
+    if: always() # Luôn chạy dù các bước trên có lỗi
+    needs: [security-scan, deploy, dast-scan] # Theo dõi trạng thái cả 3 Job
+    steps:
+      - name: Send Discord Notification
+        uses: Ilshidur/action-discord@master
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        with:
+          args: |
+            ### 🚀 DevSecOps Status Report
+            **Project:** ${{ github.repository }}
+            **Branch:** ${{ github.ref_name }}
+            
+            ** Pipeline Status:**
+            - Security Scan: ${{ needs.security-scan.result }}
+            - Deployment: ${{ needs.deploy.result }}
+            - DAST Scan: ${{ needs.dast-scan.result }}
+
+            [Details](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
