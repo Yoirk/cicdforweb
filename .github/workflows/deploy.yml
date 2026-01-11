@@ -104,14 +104,30 @@ jobs:
           script: |
             cd /root/my-app
             
-            # Pull image mới nhất về 
+            # 1. Pull image mới nhất
             docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             
-            # Restart container
+            # 2. Cấp quyền đọc SSL (Đã fix lỗi thiếu thư mục archive)
+            echo "Setting certificate permissions..."
+            
+            # Mở quyền truy cập các thư mục cha (quan trọng để user 101 đi xuyên qua được)
+            chmod 755 /etc/letsencrypt
+            chmod 755 /etc/letsencrypt/live
+            chmod 755 /etc/letsencrypt/archive
+            
+            # Mở quyền thư mục domain cụ thể
+            chmod 755 /etc/letsencrypt/live/wanderingtomes.site
+            chmod 755 /etc/letsencrypt/archive/wanderingtomes.site
+            
+            # Cấp quyền đọc file (Khi chmod vào file trong /live, nó tự apply vào file gốc trong /archive)
+            chmod 644 /etc/letsencrypt/live/wanderingtomes.site/fullchain.pem
+            chmod 644 /etc/letsencrypt/live/wanderingtomes.site/privkey.pem
+            
+            # 3. Restart container
             docker compose down
             docker compose up -d
             
-            # Dọn dẹp image cũ
+            # 4. Dọn dẹp
             docker image prune -f
 
   # 4. QUÉT BẢO MẬT ĐỘNG (DAST)
@@ -126,7 +142,7 @@ jobs:
           docker_name: 'zaproxy/zap-stable'
           target: 'https://wanderingtomes.site' # Domain của website
           rules_file_name: '.zap/rules.tsv'
-          cmd_options: '-a'
+          cmd_options: '-a -u 0'
           allow_issue_writing: false # Tắt tạo issue nếu không muốn spam
 
   # 5. THÔNG BÁO (DISCORD)
