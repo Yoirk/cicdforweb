@@ -11,6 +11,8 @@ permissions:
   packages: write
   id-token: write # Bat buoc cho OIDC signing
   security-events: write
+  issues: write         # Cần cho ZAP tạo issue báo lỗi
+  pull-requests: write  # Cần cho ZAP comment trên PR
 
 jobs:
   security-scan:
