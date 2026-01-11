@@ -6,166 +6,153 @@ on:
   pull_request:
     branches: [ "main" ]
 
-env:
-  REGISTRY: ghcr.io
-  # Tên Image theo format: owner/repo (viết thường)
-  IMAGE_NAME: yoirk/cicdforweb
+permissions:
+  contents: read
+  packages: write
+  id-token: write # Bat buoc cho OIDC signing
+  security-events: write
 
 jobs:
-  # 1. QUÉT BẢO MẬT MÃ NGUỒN (SAST)
   security-scan:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Quét lỗ hổng trong source code và thư viện
-      - name: Run Trivy FS Scan
+      - name: Run Trivy FS scan
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
           scan-ref: '.'
-          trivy-config: trivy.yaml # Nếu có
+          trivy-config: trivy.yaml
+          format: 'sarif'
+          output: 'trivy-fs-results.sarif'
           severity: 'CRITICAL,HIGH'
 
-      # Tạo SBOM cho file system
-      - name: Generate SBOM (Syft)
-        uses: anchore/sbom-action@v0
+      - name: Upload Trivy results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
         with:
-          path: .
-          format: cyclonedx-json
-          output-file: sbom-fs.cyclonedx.json
-      
-      # Lưu SBOM làm artifact
-      - name: Upload SBOM Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom-fs
-          path: sbom-fs.cyclonedx.json
+          sarif_file: 'trivy-fs-results.sarif'
 
-  # 2. BUILD IMAGE & ĐẨY LÊN REGISTRY
-  build-and-push:
-    needs: security-scan # Chỉ chạy nếu scan code OK
+  build-push-sign:
+    needs: security-scan
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write # Cần quyền để push lên GHCR
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Log in to GitHub Container Registry
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.3.0
+
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # Build và Push Image
-      - name: Build and push Docker image
+      - name: Build and Push
         uses: docker/build-push-action@v5
+        id: build-and-push
         with:
           context: .
           push: true
-          # Tag theo latest và commit hash để dễ rollback
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ghcr.io/yoirk/cicdforweb:latest
+            ghcr.io/yoirk/cicdforweb:${{ github.sha }}
 
-  # 3. DEPLOY LÊN VPS 
+      - name: Sign image with OIDC
+        run: |
+          cosign sign --yes ghcr.io/yoirk/cicdforweb:${{ github.sha }}
+          cosign sign --yes ghcr.io/yoirk/cicdforweb:latest
+
   deploy:
-    needs: build-and-push
+    needs: build-push-sign
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # Copy file docker-compose.yml mới nhất lên VPS
-      - name: Copy docker-compose via SCP
-        uses: appleboy/scp-action@master
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "docker-compose.yml"
-          target: "/root/my-app/"
-
-      # SSH vào VPS để pull image và restart container
-      - name: Execute remote deploy
-        uses: appleboy/ssh-action@master
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            # 1. Install Cosign if missing
+            if ! command -v cosign &> /dev/null; then
+                wget "https://github.com/sigstore/cosign/releases/download/v2.2.3/cosign-linux-amd64"
+                mv cosign-linux-amd64 /usr/local/bin/cosign
+                chmod +x /usr/local/bin/cosign
+            fi
+
             cd /root/my-app
             
-            # 1. Pull image mới nhất
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            # 2. Pull new image
+            docker pull ghcr.io/yoirk/cicdforweb:latest
             
-            # 2. Cấp quyền đọc SSL (Đã fix lỗi thiếu thư mục archive)
+            # 3. Verify Signature (OIDC)
+            # Check Issuer and Identity (Repo owner/name)
+            if cosign verify \
+              --certificate-identity-regexp "^https://github.com/yoirk/cicdforweb/.*" \
+              --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+              ghcr.io/yoirk/cicdforweb:latest; then
+              
+              echo "Signature Verified. Deploying..."
+              
+            else
+              echo "SECURITY ALERT: Signature verification failed."
+              exit 1
+            fi
+            
+            # 4. Set SSL permissions (FIXED LOGIC)
             echo "Setting certificate permissions..."
-            
-            # Mở quyền truy cập các thư mục cha (quan trọng để user 101 đi xuyên qua được)
             chmod 755 /etc/letsencrypt
             chmod 755 /etc/letsencrypt/live
             chmod 755 /etc/letsencrypt/archive
             
-            # Mở quyền thư mục domain cụ thể
+            # Domain specific permissions
             chmod 755 /etc/letsencrypt/live/wanderingtomes.site
             chmod 755 /etc/letsencrypt/archive/wanderingtomes.site
             
-            # Cấp quyền đọc file (Khi chmod vào file trong /live, nó tự apply vào file gốc trong /archive)
+            # File specific permissions
             chmod 644 /etc/letsencrypt/live/wanderingtomes.site/fullchain.pem
             chmod 644 /etc/letsencrypt/live/wanderingtomes.site/privkey.pem
             
-            # 3. Restart container
+            # 5. Restart container
             docker compose down
             docker compose up -d
             
-            # 4. Dọn dẹp
+            # 6. Cleanup
             docker image prune -f
 
-  # 4. QUÉT BẢO MẬT ĐỘNG (DAST)
   dast-scan:
     needs: deploy
     runs-on: ubuntu-latest
     steps:
-      # Phải Checkout code thì mới có file .zap/rules.tsv để đọc
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Cấp quyền ghi (777) cho thư mục hiện tại trước khi chạy ZAP
-      # Điều này giúp user bên trong container (UID 1000) có thể ghi file báo cáo ra ngoài
-      - name: Fix permissions for ZAP container
+      - name: Prepare workspace
         run: chmod -R 777 .
 
       - name: OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.14.0
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          docker_name: 'zaproxy/zap-stable'
           target: 'https://wanderingtomes.site'
           rules_file_name: '.zap/rules.tsv'
-          cmd_options: '-a' 
-          allow_issue_writing: false
+          cmd_options: '-a'
 
-  # 5. THÔNG BÁO (DISCORD)
   notify:
-    if: always()
-    needs: [security-scan, build-and-push, deploy, dast-scan]
+    needs: [security-scan, build-push-sign, deploy, dast-scan]
     runs-on: ubuntu-latest
+    if: always() # Luon chay de bao cao ket qua
     steps:
-      - name: Send Discord Notification
-        uses: nobrayner/discord-webhook@v1
+      - name: Discord Notification
+        uses: sarisia/actions-status-discord@v1
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          discord-webhook: ${{ secrets.DISCORD_WEBHOOK }}
-          title: "CI/CD Pipeline Status"
-          description: "Build & Deploy cho commit ${{ github.sha }} đã hoàn tất."
-          color-success: '#2eb886'
-          color-failure: '#ff0000'
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: ${{ contains(needs.*.result, 'failure') && 'failure' || 'success' }}
+          title: "DevSecOps Pipeline Status"
+          description: "Build, Sign, Deploy & Scan completed."
+          color: 0x0000ff
+          url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
