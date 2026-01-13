@@ -4,63 +4,68 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wandering Tomes</title>
+    
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📖</text></svg>">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
     <style>
         /* --- Base Styles --- */
-        body { font-family: monospace; margin: 0; padding: 0; background: #f4f4f4; overflow-x: hidden; }
+        body { font-family: 'Courier New', Courier, monospace; margin: 0; padding: 0; background: #f4f4f4; overflow-x: hidden; }
         
+        /* Header */
         header {
-            background: #fff; padding: 15px 20px; 
+            background: #fff; padding: 0 20px; 
             display: flex; justify-content: space-between; align-items: center;
             border-bottom: 2px solid #333; position: sticky; top: 0; z-index: 100;
+            height: 60px; box-sizing: border-box;
         }
-        h1 { margin: 0; font-size: 1.5rem; cursor: pointer; }
+
+        .header-right { display: flex; gap: 25px; align-items: center; }
+
+        /* Style chung cho nút Icon */
+        .header-btn { 
+            font-size: 1.4rem; cursor: pointer; background: none; border: none; 
+            padding: 0; color: #333; transition: color 0.2s, transform 0.2s;
+        }
+        .header-btn:hover { transform: scale(1.1); color: #000; }
+
+        /* Logo to hơn chút */
+        .logo-btn { font-size: 1.6rem; } 
+
+        /* Search Bar */
+        .search-bar-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 60px;
+            background: #fff; z-index: 101;
+            display: flex; align-items: center; padding: 0 20px; box-sizing: border-box;
+            border-bottom: 2px solid #333;
+            transform: translateY(-100%); transition: transform 0.3s ease;
+        }
+        .search-bar-container.active { transform: translateY(0); }
         
-        /* User Icon: Luôn là hình người, chỉ dùng để xem info */
-        .user-btn { font-size: 1.5rem; cursor: pointer; background: none; border: none; }
+        .search-input {
+            flex-grow: 1; border: none; font-size: 1.1rem; font-family: inherit; outline: none;
+            background: transparent; margin-left: 10px;
+        }
+        .close-search { font-size: 1.4rem; cursor: pointer; background: none; border: none; margin-left: 15px; color: #666; }
 
-        /* --- FLOATING ACTION BUTTON (Nút Bong Bóng) --- */
+        /* --- FAB BUTTON (Cây bút) --- */
         .fab-btn {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            width: 60px;
-            height: 60px;
-            background-color: #333;
-            color: #fff;
-            border-radius: 50%;
-            border: none;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            font-size: 1.8rem;
-            cursor: pointer;
-            z-index: 150;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            transition: transform 0.2s, background 0.2s;
+            position: fixed; bottom: 30px; right: 30px;
+            width: 60px; height: 60px; background-color: #333; color: #fff;
+            border-radius: 50%; border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            font-size: 1.5rem; cursor: pointer; z-index: 150;
+            display: flex; justify-content: center; align-items: center;
+            transition: transform 0.2s;
         }
-        .fab-btn:hover {
-            transform: scale(1.1); /* Phóng to nhẹ khi rê chuột */
-            background-color: #000;
-        }
+        .fab-btn:hover { transform: scale(1.1); background-color: #000; }
 
-        /* --- STREAM FLOW STYLES --- */
-        .stream-container {
-            width: 100%;
-            padding: 50px 0;
-            overflow: hidden;
-            position: relative;
-        }
-        .stream-track {
-            display: flex;
-            gap: 30px;
-            width: max-content;
-            animation: flow 40s linear infinite;
-        }
+        /* --- Stream Flow --- */
+        .stream-container { width: 100%; padding: 50px 0; overflow: hidden; position: relative; }
+        .stream-track { display: flex; gap: 30px; width: max-content; animation: flow 40s linear infinite; }
         .stream-track:hover { animation-play-state: paused; }
-        @keyframes flow {
-            0% { transform: translateX(100vw); }
-            100% { transform: translateX(-100%); }
-        }
+        @keyframes flow { 0% { transform: translateX(100vw); } 100% { transform: translateX(-100%); } }
+        
         .card { 
             background: #fff; border: 1px solid #333; padding: 20px; 
             width: 300px; flex-shrink: 0; box-shadow: 6px 6px 0 #333; 
@@ -71,7 +76,7 @@
         .author { font-size: 0.8em; color: #666; margin-top: 15px; text-align: right; font-style: italic; }
         .empty-msg { text-align: center; color: #777; width: 100vw; }
 
-        /* --- Modal & Form Styles --- */
+        /* --- Modal --- */
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.5); display: none; 
@@ -81,36 +86,45 @@
             background: #fff; padding: 30px; width: 90%; max-width: 400px;
             border: 2px solid #333; box-shadow: 8px 8px 0 #333; position: relative;
         }
-        .close-btn { 
-            position: absolute; top: 5px; right: 10px; 
-            font-size: 1.5rem; cursor: pointer; background: none; border: none;
-        }
-        
-        input, textarea, button.action-btn { 
-            width: 100%; padding: 10px; margin: 10px 0; 
-            box-sizing: border-box; border: 1px solid #ccc; 
-        }
+        .close-btn { position: absolute; top: 10px; right: 15px; font-size: 1.5rem; cursor: pointer; background: none; border: none; color: #666; }
+        input:not(.search-input), textarea, button.action-btn { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; border: 1px solid #ccc; }
         button.action-btn { background: #333; color: #fff; cursor: pointer; border: none; font-weight: bold; }
-        button.action-btn:hover { background: #555; }
-        .link-btn { color: blue; text-decoration: underline; cursor: pointer; border: none; background: none;}
-        
         .hidden { display: none; }
         .error { color: red; font-size: 0.9em; margin-top: 5px; }
         .success { color: green; font-size: 0.9em; margin-top: 5px; font-weight: bold; }
-        
-        /* Style riêng cho trang thông tin User */
         .profile-info { text-align: center; margin-bottom: 20px; }
-        .profile-avatar { font-size: 3rem; display: block; margin-bottom: 10px; }
+        .profile-avatar { font-size: 4rem; display: block; margin-bottom: 15px; color: #333; }
+        .link-btn { color: blue; text-decoration: underline; cursor: pointer; border: none; background: none;}
     </style>
 </head>
 <body>
 
     <header>
-        <h1 onclick="loadRandomThoughts()">📚 Wandering Tomes</h1>
-        <button class="user-btn" onclick="handleUserIconClick()">👤</button>
+        <button class="header-btn logo-btn" onclick="loadRandomThoughts()" title="Trang chủ">
+            <i class="fa-solid fa-book-open"></i>
+        </button>
+        
+        <div class="header-right">
+            <button class="header-btn" onclick="toggleSearch()" title="Tìm kiếm">
+                <i class="fa-solid fa-magnifying-glass"></i>
+            </button>
+            <button class="header-btn" onclick="handleUserIconClick()" title="Tài khoản">
+                <i class="fa-solid fa-user"></i>
+            </button>
+        </div>
     </header>
 
-    <button class="fab-btn" onclick="handleFabClick()" title="Viết bài mới">✎</button>
+    <div class="search-bar-container" id="searchBar">
+        <i class="fa-solid fa-magnifying-glass" style="color:#666"></i>
+        <input type="text" class="search-input" id="searchInput" placeholder="Tìm sách hoặc nội dung..." onkeypress="handleSearch(event)">
+        <button class="close-search" onclick="toggleSearch()">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+    </div>
+
+    <button class="fab-btn" onclick="handleFabClick()" title="Viết bài mới">
+        <i class="fa-solid fa-pen-nib"></i>
+    </button>
 
     <div class="stream-container" id="feedContainer">
         <div class="stream-track" id="feedTrack">
@@ -120,10 +134,12 @@
 
     <div class="modal-overlay" id="authModal">
         <div class="modal-content">
-            <button class="close-btn" onclick="closeModal()">&times;</button>
+            <button class="close-btn" onclick="closeModal()">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
             
             <div id="loginForm">
-                <h3>🔑 Đăng nhập</h3>
+                <h3><i class="fa-solid fa-key"></i> Đăng nhập</h3>
                 <input type="text" id="lUser" placeholder="Username">
                 <input type="password" id="lPass" placeholder="Password">
                 <button class="action-btn" onclick="doLogin()">Vào ngay</button>
@@ -132,7 +148,7 @@
             </div>
 
             <div id="registerForm" class="hidden">
-                <h3>📝 Tạo tài khoản</h3>
+                <h3><i class="fa-solid fa-user-plus"></i> Tạo tài khoản</h3>
                 <input type="text" id="rUser" placeholder="Username mới">
                 <input type="password" id="rPass" placeholder="Password mới">
                 <button class="action-btn" onclick="doRegister()">Đăng ký</button>
@@ -141,7 +157,7 @@
             </div>
 
             <div id="postForm" class="hidden">
-                <h3>✍️ Chia sẻ suy nghĩ</h3>
+                <h3><i class="fa-solid fa-pen"></i> Chia sẻ suy nghĩ</h3>
                 <input type="text" id="bookTitle" placeholder="Tên cuốn sách tâm đắc">
                 <textarea id="thoughtContent" rows="5" placeholder="Bạn nghĩ gì về nó?"></textarea>
                 <button class="action-btn" onclick="postThought()">Thả trôi dòng suy nghĩ</button>
@@ -151,7 +167,7 @@
             <div id="profileForm" class="hidden">
                 <h3>Hồ sơ người dùng</h3>
                 <div class="profile-info">
-                    <span class="profile-avatar">👤</span>
+                    <span class="profile-avatar"><i class="fa-solid fa-circle-user"></i></span>
                     <p>Xin chào, <b id="profileName">User</b>!</p>
                 </div>
                 <button class="action-btn" style="background:#ccc; color:#000" onclick="logout()">Đăng xuất</button>
@@ -160,74 +176,70 @@
     </div>
 
     <script>
-        // Init
+        // --- LOGIC JS GIỮ NGUYÊN (Không đổi) ---
+        const token = localStorage.getItem('token');
+        const currentUser = localStorage.getItem('user');
         loadRandomThoughts();
 
-        // --- Logic Xử lý sự kiện Click ---
-        
-        // 1. Khi bấm vào User Icon trên Header
-        function handleUserIconClick() {
-            clearInputs();
-            document.getElementById('authModal').style.display = 'flex';
-            
-            if (localStorage.getItem('token')) {
-                // Đã login -> Hiện Profile
-                switchForm('profile', false);
-                document.getElementById('profileName').innerText = localStorage.getItem('user');
-            } else {
-                // Chưa login -> Hiện Login
-                switchForm('login', false);
+        function toggleSearch() {
+            const bar = document.getElementById('searchBar');
+            bar.classList.toggle('active');
+            if (bar.classList.contains('active')) document.getElementById('searchInput').focus();
+        }
+
+        async function handleSearch(e) {
+            if (e.key === 'Enter') {
+                const query = document.getElementById('searchInput').value;
+                if (!query.trim()) return;
+                try {
+                    document.getElementById('feedTrack').style.animationPlayState = 'paused';
+                    let res = await fetch(`/api/thoughts/search?q=${query}`);
+                    let data = await res.json();
+                    if (data.results.length > 0) renderFeed(data.results);
+                    else document.getElementById('feedTrack').innerHTML = '<div class="empty-msg">Không tìm thấy cuốn nào như vậy cả...</div>';
+                    toggleSearch();
+                } catch (e) { console.error(e); }
             }
         }
 
-        // 2. Khi bấm vào Nút FAB (Viết bài)
+        function handleUserIconClick() {
+            clearInputs();
+            document.getElementById('authModal').style.display = 'flex';
+            if (localStorage.getItem('token')) {
+                switchForm('profile', false);
+                document.getElementById('profileName').innerText = localStorage.getItem('user');
+            } else { switchForm('login', false); }
+        }
+
         function handleFabClick() {
             clearInputs();
             document.getElementById('authModal').style.display = 'flex';
-
-            if (localStorage.getItem('token')) {
-                // Đã login -> Hiện Form Viết bài
-                switchForm('post', false);
-            } else {
-                // Chưa login -> Hiện Login (kèm thông báo nhắc nhở)
+            if (localStorage.getItem('token')) { switchForm('post', false); }
+            else {
                 switchForm('login', false);
-                // Nhắc user cần login để viết
                 let msg = document.getElementById('lMsg');
                 msg.innerText = "Bạn cần đăng nhập để viết bài nhé!";
                 msg.className = 'error'; 
             }
         }
 
-        // --- Các Logic cũ (Stream, API) giữ nguyên ---
-        
         function clearInputs() {
-            document.querySelectorAll('input, textarea').forEach(input => input.value = '');
+            document.querySelectorAll('input:not(.search-input), textarea').forEach(input => input.value = '');
             ['lMsg', 'rMsg', 'pMsg'].forEach(id => {
                 const el = document.getElementById(id);
                 if(el) { el.innerText = ''; el.className = ''; }
             });
         }
-
-        function closeModal() {
-            document.getElementById('authModal').style.display = 'none';
-        }
-
-        document.getElementById('authModal').addEventListener('click', function(e) {
-            if (e.target === this) closeModal();
-        });
-
+        function closeModal() { document.getElementById('authModal').style.display = 'none'; }
+        document.getElementById('authModal').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
         function switchForm(type, shouldClear = true) {
             if(shouldClear) clearInputs();
-            // Ẩn tất cả form
-            ['loginForm', 'registerForm', 'postForm', 'profileForm'].forEach(id => {
-                document.getElementById(id).classList.add('hidden');
-            });
-            // Hiện form cần thiết
+            ['loginForm', 'registerForm', 'postForm', 'profileForm'].forEach(id => document.getElementById(id).classList.add('hidden'));
             document.getElementById(type + 'Form').classList.remove('hidden');
         }
 
-        // --- API Calls ---
         async function loadRandomThoughts() {
+            document.getElementById('feedTrack').style.animationPlayState = 'running';
             try {
                 let res = await fetch('/api/thoughts/random');
                 let data = await res.json();
@@ -243,12 +255,12 @@
             }
             const cardsHtml = items.map(i => `
                 <div class="card">
-                    <div class="book-title">📖 ${escapeHtml(i.book_title)}</div>
+                    <div class="book-title"><i class="fa-solid fa-book"></i> ${escapeHtml(i.book_title)}</div>
                     <div class="content-text">${escapeHtml(i.content)}</div>
                     <small class="author">― ${escapeHtml(i.username)}</small>
                 </div>
             `).join('');
-            track.innerHTML = cardsHtml + cardsHtml; 
+            track.innerHTML = items.length < 5 ? cardsHtml.repeat(4) : cardsHtml + cardsHtml; 
         }
 
         async function doRegister() {
@@ -263,12 +275,10 @@
                 if (res.ok) {
                     switchForm('login'); 
                     let msg = document.getElementById('lMsg');
-                    msg.innerText = 'Đăng ký thành công! Mời bạn vào.';
-                    msg.className = 'success';
+                    msg.innerText = 'Đăng ký thành công! Mời bạn vào.'; msg.className = 'success';
                     document.getElementById('lUser').value = u;
                 } else {
-                    document.getElementById('rMsg').innerText = 'Tên này đã có người dùng.';
-                    document.getElementById('rMsg').className = 'error';
+                    document.getElementById('rMsg').innerText = 'Tên này đã có người dùng.'; document.getElementById('rMsg').className = 'error';
                 }
             } catch (e) { document.getElementById('rMsg').innerText = 'Lỗi kết nối'; }
         }
@@ -278,7 +288,6 @@
             let p = document.getElementById('lPass').value;
             let msg = document.getElementById('lMsg');
             msg.innerText = 'Đang kiểm tra...'; msg.className = '';
-
             try {
                 let res = await fetch('/api/login', {
                     method: 'POST', headers: {'Content-Type':'application/json'},
@@ -288,48 +297,29 @@
                     let data = await res.json();
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('user', u);
-                    
-                    // Logic mới: Login xong thì đóng modal luôn (hoặc chuyển sang Profile nếu muốn)
-                    // Ở đây mình chọn đóng modal để user tiếp tục xem bài
                     closeModal(); 
-                    
-                    // Nếu login từ nút FAB, có thể muốn mở lại form Post? 
-                    // Để đơn giản và "chill", cứ đóng modal đã. User muốn viết thì bấm FAB lại.
                 } else {
-                    msg.innerText = 'Sai tên hoặc mật khẩu rồi!';
-                    msg.className = 'error';
+                    msg.innerText = 'Sai tên hoặc mật khẩu rồi!'; msg.className = 'error';
                 }
-            } catch (e) { 
-                msg.innerText = 'Lỗi kết nối'; msg.className = 'error';
-            }
+            } catch (e) { msg.innerText = 'Lỗi kết nối'; msg.className = 'error'; }
         }
 
         async function postThought() {
             let title = document.getElementById('bookTitle').value;
             let content = document.getElementById('thoughtContent').value;
             let pMsg = document.getElementById('pMsg');
-
             if(!title || !content) { pMsg.innerText = "Hãy viết gì đó nhé."; return; }
-
             try {
                 let res = await fetch(`/api/thoughts?token=${localStorage.getItem('token')}`, {
                     method: 'POST', headers: {'Content-Type':'application/json'},
                     body: JSON.stringify({content: content, book_title: title})
                 });
-                if (res.ok) { 
-                    closeModal(); 
-                    loadRandomThoughts();
-                } else {
-                    pMsg.innerText = "Lỗi xác thực (Hết hạn phiên?).";
-                }
+                if (res.ok) { closeModal(); loadRandomThoughts(); } 
+                else { pMsg.innerText = "Lỗi xác thực (Hết hạn phiên?)."; }
             } catch (e) { pMsg.innerText = "Lỗi kết nối."; }
         }
 
-        function logout() {
-            localStorage.clear();
-            closeModal();
-        }
-
+        function logout() { localStorage.clear(); closeModal(); }
         function escapeHtml(text) {
             if (!text) return "";
             return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
