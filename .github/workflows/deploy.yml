@@ -42,6 +42,18 @@ jobs:
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
 
+      # 3. Quét Logic Code Python bằng Bandit (Dùng CLI trực tiếp)
+      - name: Python Logic Scan (Bandit)
+        run: |
+          # Cài đặt Bandit
+          pip install bandit
+          
+          # Chạy quét:
+          # -r: Recursive (Quét đệ quy thư mục)
+          # -lll: Chỉ báo lỗi mức High (Critical) để tránh spam warning nhẹ
+          # ./backend: Đường dẫn thư mục code của bạn
+          bandit -r ./backend -lll
+
   build-and-push:
     needs: security-sast
     runs-on: ubuntu-latest
