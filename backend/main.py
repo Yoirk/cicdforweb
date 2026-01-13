@@ -9,8 +9,9 @@ app = FastAPI()
 # Config
 SECRET_KEY = os.getenv("SECRET_KEY", "dev_secret")
 ALGO = "HS256"
-DB_PATH = "/data/app.db" # Lưu trong volume
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+DB_PATH = "/data/app.db"
+# SỬA Ở ĐÂY: Đổi sang argon2
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 def get_db():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -47,6 +48,7 @@ def get_current_user(token: str):
 # API
 @app.post("/register")
 def register(user: UserAuth):
+    # Sẽ tự động dùng Argon2 để hash
     hashed = pwd_context.hash(user.password)
     try:
         with get_db() as conn:
@@ -60,6 +62,7 @@ def register(user: UserAuth):
 def login(user: UserAuth):
     with get_db() as conn:
         row = conn.execute("SELECT * FROM users WHERE username=?", (user.username,)).fetchone()
+    # Verify cũng dùng Argon2
     if not row or not pwd_context.verify(user.password, row['password_hash']):
         raise HTTPException(401, "Bad credentials")
     return {"token": create_token({"sub": user.username})}
@@ -76,7 +79,6 @@ def add_thought(item: ThoughtCreate, token: str):
 
 @app.get("/thoughts/search")
 def search(q: str = ""):
-    # Tìm theo tên sách hoặc nội dung
     sql = "SELECT t.content, t.book_title, u.username FROM thoughts t JOIN users u ON t.user_id = u.id WHERE t.book_title LIKE ? OR t.content LIKE ? ORDER BY t.id DESC LIMIT 20"
     val = f"%{q}%"
     with get_db() as conn:

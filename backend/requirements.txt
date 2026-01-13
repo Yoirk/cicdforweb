@@ -2,4 +2,4 @@ fastapi
 uvicorn
 pydantic
 python-jose[cryptography]
-passlib[bcrypt]
+passlib[argon2]
