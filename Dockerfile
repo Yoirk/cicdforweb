@@ -22,5 +22,7 @@ RUN chown -R 101:101 /usr/share/nginx/html && \
 # 7. Expose port
 EXPOSE 80 443
 
+USER 101
+
 # 8. Start Nginx
 CMD ["nginx", "-g", "daemon off;"]
