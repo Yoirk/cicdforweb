@@ -8,13 +8,11 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_WEB: ghcr.io/${{ github.repository }}
-  IMAGE_BACKEND: ghcr.io/${{ github.repository }}-backend
 
 permissions:
   contents: read
   packages: write
-  id-token: write # Required for Cosign
+  id-token: write
 
 jobs:
   build-and-push:
@@ -34,6 +32,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Chuyển tên Repo thành chữ thường
+      - name: Lowercase Repository Name
+        run: |
+          echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3.3.0
 
@@ -47,14 +50,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Set image name based on matrix service
+      # Sử dụng biến REPO_LC (đã viết thường) thay vì github.repository
       - name: Set Image Tag
         id: meta
         run: |
           if [ "${{ matrix.service }}" == "web" ]; then
-            echo "image=${{ env.IMAGE_WEB }}" >> $GITHUB_OUTPUT
+            echo "image=ghcr.io/${{ env.REPO_LC }}" >> $GITHUB_OUTPUT
           else
-            echo "image=${{ env.IMAGE_BACKEND }}" >> $GITHUB_OUTPUT
+            echo "image=ghcr.io/${{ env.REPO_LC }}-backend" >> $GITHUB_OUTPUT
           fi
 
       - name: Build and Push
@@ -94,7 +97,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Copy config files to VPS
+      # Cũng cần lowercase ở job deploy để verify đúng tên
+      - name: Lowercase Repository Name
+        run: |
+          echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
       - name: Copy Config
         uses: appleboy/scp-action@master
         with:
@@ -105,40 +112,40 @@ jobs:
           target: "/root/my-app"
           strip_components: 0
 
-      # SSH to deploy
       - name: SSH Deploy
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          # Truyền biến REPO_LC vào trong script SSH thông qua env
+          envs: REPO_LC
           script: |
             cd /root/my-app
             
-            # 1. Pull latest images
+            # Pull image mới
             docker compose pull
 
-            # 2. Verify Signatures (Cosign)
-            REPO_REGEX="^https://github.com/[Yy]oirk/cicdforweb/.*"
+            # Verify Signatures (Dùng biến REPO_LC đã viết thường)
+            # Regex cũng cần update để match chữ thường
+            REPO_REGEX="^https://github.com/${REPO_LC}/.*"
             ISSUER="https://token.actions.githubusercontent.com"
             
             echo "Verifying web signature..."
-            cosign verify --certificate-identity-regexp "$REPO_REGEX" --certificate-oidc-issuer "$ISSUER" ghcr.io/${{ github.repository }}:latest
+            cosign verify --certificate-identity-regexp "$REPO_REGEX" --certificate-oidc-issuer "$ISSUER" ghcr.io/${REPO_LC}:latest
             
             echo "Verifying backend signature..."
-            cosign verify --certificate-identity-regexp "$REPO_REGEX" --certificate-oidc-issuer "$ISSUER" ghcr.io/${{ github.repository }}-backend:latest
+            cosign verify --certificate-identity-regexp "$REPO_REGEX" --certificate-oidc-issuer "$ISSUER" ghcr.io/${REPO_LC}-backend:latest
 
-            # 3. Set SSL Permissions (Best Practice)
-            # Folders: 755 (execute needed for cd)
+            # Set SSL Permissions (Best Practice)
             find /etc/letsencrypt/live -type d -exec chmod 755 {} +
             find /etc/letsencrypt/archive -type d -exec chmod 755 {} +
-            # Files: 644 (read only, no execute)
             find /etc/letsencrypt/live -type f -exec chmod 644 {} +
             find /etc/letsencrypt/archive -type f -exec chmod 644 {} +
 
-            # 4. Restart containers
+            # Restart containers
             docker compose down
             docker compose up -d
 
-            # 5. Cleanup old images
+            # Cleanup
             docker image prune -f
