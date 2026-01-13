@@ -15,7 +15,35 @@ permissions:
   id-token: write
 
 jobs:
+  security-sast:
+    name: SAST & Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 1. Quét Secret (Sửa security-checks -> scanners)
+      - name: Trivy Secret Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          trivy-config: trivy.yaml
+          scanners: 'secret'          
+          exit-code: '1'
+
+      # 2. Quét lỗ hổng Code & Config 
+      - name: Trivy SAST Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          scanners: 'vuln,misconfig' 
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+
   build-and-push:
+    needs: security-sast
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
