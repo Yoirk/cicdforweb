@@ -39,7 +39,7 @@ services:
     tmpfs:
       - /tmp
     environment:
-      - SECRET_KEY=thay_doi_khi_len_prod
+      - SECRET_KEY=Ah7s8@!hasd123^&*(SD
     user: "1001"
     read_only: true
     deploy:
