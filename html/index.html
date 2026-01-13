@@ -5,21 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wandering Tomes</title>
     <style>
-        /* Reset & Base */
+        /* --- GIỮ NGUYÊN CSS CŨ (Minimal Style) --- */
         body { font-family: monospace; margin: 0; padding: 0; background: #f4f4f4; }
         
-        /* Header */
         header {
             background: #fff; padding: 15px 20px; 
             display: flex; justify-content: space-between; align-items: center;
             border-bottom: 2px solid #333; position: sticky; top: 0; z-index: 100;
         }
         h1 { margin: 0; font-size: 1.5rem; cursor: pointer; }
-        .user-btn { 
-            font-size: 1.5rem; cursor: pointer; background: none; border: none; 
-        }
+        .user-btn { font-size: 1.5rem; cursor: pointer; background: none; border: none; }
 
-        /* Main Feed */
         .container { max-width: 800px; margin: 20px auto; padding: 0 15px; }
         .card { 
             background: #fff; border: 1px solid #333; padding: 20px; 
@@ -29,7 +25,6 @@
         .author { font-size: 0.8em; color: #666; margin-top: 10px; display: block; }
         .empty-msg { text-align: center; color: #777; margin-top: 50px; }
 
-        /* Modal (Popup) */
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.5); display: none; 
@@ -44,7 +39,6 @@
             font-size: 1.5rem; cursor: pointer; background: none; border: none;
         }
         
-        /* Form Elements */
         input, textarea, button.action-btn { 
             width: 100%; padding: 10px; margin: 10px 0; 
             box-sizing: border-box; border: 1px solid #ccc; 
@@ -55,7 +49,10 @@
         button.action-btn:hover { background: #555; }
         .link-btn { color: blue; text-decoration: underline; cursor: pointer; border: none; background: none;}
         .hidden { display: none; }
-        .error { color: red; font-size: 0.9em; }
+        
+        /* --- CẬP NHẬT CSS MỚI --- */
+        .error { color: red; font-size: 0.9em; margin-top: 5px; }
+        .success { color: green; font-size: 0.9em; margin-top: 5px; font-weight: bold; } /* Style cho thông báo thành công */
     </style>
 </head>
 <body>
@@ -79,7 +76,7 @@
                 <input type="password" id="lPass" placeholder="Password">
                 <button class="action-btn" onclick="doLogin()">Vào ngay</button>
                 <p>Chưa có tài khoản? <button class="link-btn" onclick="switchForm('register')">Đăng ký</button></p>
-                <p id="lMsg" class="error"></p>
+                <p id="lMsg"></p> 
             </div>
 
             <div id="registerForm" class="hidden">
@@ -103,11 +100,9 @@
     </div>
 
     <script>
-        // --- State Management ---
         const token = localStorage.getItem('token');
         const currentUser = localStorage.getItem('user');
         
-        // --- Init ---
         loadRandomThoughts();
         updateUserIcon();
 
@@ -135,15 +130,27 @@
             `).join('');
         }
 
-        // --- Modal & Auth Logic ---
+        // --- Modal & Form Logic (Đã cập nhật) ---
+        
+        // Hàm mới: Xóa trắng toàn bộ input và thông báo
+        function clearInputs() {
+            document.querySelectorAll('input').forEach(input => input.value = '');
+            // Xóa nội dung thông báo
+            document.getElementById('lMsg').innerText = ''; 
+            document.getElementById('lMsg').className = ''; // Reset class (bỏ error/success)
+            document.getElementById('rMsg').innerText = '';
+        }
+
         function openModal() {
+            // Xóa trắng mỗi khi mở modal
+            clearInputs();
             document.getElementById('authModal').style.display = 'flex';
-            // Nếu đã login -> hiện form post, chưa -> hiện login
+            
             if (localStorage.getItem('token')) {
-                switchForm('post');
+                switchForm('post', false); // false = không clear input lần nữa
                 document.getElementById('welcomeUser').innerText = localStorage.getItem('user');
             } else {
-                switchForm('login');
+                switchForm('login', false);
             }
         }
 
@@ -151,33 +158,63 @@
             document.getElementById('authModal').style.display = 'none';
         }
 
-        // Đóng modal khi click ra ngoài
         document.getElementById('authModal').addEventListener('click', function(e) {
             if (e.target === this) closeModal();
         });
 
-        function switchForm(type) {
+        // Cập nhật hàm switchForm để hỗ trợ clear input
+        function switchForm(type, shouldClear = true) {
+            if(shouldClear) clearInputs(); // Xóa dữ liệu cũ khi chuyển tab
+
             ['loginForm', 'registerForm', 'postForm'].forEach(id => document.getElementById(id).classList.add('hidden'));
             document.getElementById(type + 'Form').classList.remove('hidden');
-            // Reset msg
-            document.getElementById('lMsg').innerText = '';
-            document.getElementById('rMsg').innerText = '';
         }
 
-        function updateUserIcon() {
-            const btn = document.getElementById('userIcon');
-            if (localStorage.getItem('token')) {
-                btn.innerText = '✍️'; // Đổi icon thành cây bút khi đã login
-                btn.title = "Viết bài / Tài khoản";
-            } else {
-                btn.innerText = '👤'; // Icon người khi chưa login
+        // --- API Calls (Cập nhật Logic thông báo) ---
+        async function doRegister() {
+            let u = document.getElementById('rUser').value;
+            let p = document.getElementById('rPass').value;
+            
+            // Validate sơ bộ
+            if(!u || !p) {
+                document.getElementById('rMsg').innerText = 'Vui lòng điền đủ thông tin';
+                return;
+            }
+
+            try {
+                let res = await fetch('/api/register', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({username: u, password: p})
+                });
+
+                if (res.ok) {
+                    // 1. Chuyển về form Login
+                    switchForm('login'); 
+                    
+                    // 2. Hiển thị thông báo thành công màu xanh (thay vì alert)
+                    let msgBox = document.getElementById('lMsg');
+                    msgBox.innerText = 'Đăng ký thành công! Hãy đăng nhập ngay.';
+                    msgBox.className = 'success'; // Thêm class màu xanh
+                    
+                    // 3. Điền sẵn username vừa đăng ký cho tiện (Optional - UX tốt)
+                    document.getElementById('lUser').value = u;
+                } else {
+                    document.getElementById('rMsg').innerText = 'Tên đăng nhập đã tồn tại!';
+                    document.getElementById('rMsg').className = 'error';
+                }
+            } catch (e) { 
+                document.getElementById('rMsg').innerText = 'Lỗi kết nối Server';
             }
         }
 
-        // --- API Calls (Giữ nguyên logic cũ, chỉ map lại UI) ---
         async function doLogin() {
             let u = document.getElementById('lUser').value;
             let p = document.getElementById('lPass').value;
+            let msgBox = document.getElementById('lMsg');
+            
+            msgBox.innerText = 'Đang xử lý...';
+            msgBox.className = ''; // Reset màu
+
             try {
                 let res = await fetch('/api/login', {
                     method: 'POST', headers: {'Content-Type':'application/json'},
@@ -188,29 +225,27 @@
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('user', u);
                     updateUserIcon();
-                    switchForm('post'); // Chuyển ngay sang màn hình viết bài
+                    switchForm('post');
                     document.getElementById('welcomeUser').innerText = u;
                 } else {
-                    document.getElementById('lMsg').innerText = 'Sai thông tin!';
+                    msgBox.innerText = 'Sai tài khoản hoặc mật khẩu!';
+                    msgBox.className = 'error'; // Màu đỏ
                 }
-            } catch (e) { document.getElementById('lMsg').innerText = 'Lỗi mạng'; }
+            } catch (e) { 
+                msgBox.innerText = 'Lỗi kết nối';
+                msgBox.className = 'error';
+            }
         }
 
-        async function doRegister() {
-            let u = document.getElementById('rUser').value;
-            let p = document.getElementById('rPass').value;
-            try {
-                let res = await fetch('/api/register', {
-                    method: 'POST', headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({username: u, password: p})
-                });
-                if (res.ok) {
-                    alert('Đăng ký xong! Hãy đăng nhập.');
-                    switchForm('login');
-                } else {
-                    document.getElementById('rMsg').innerText = 'Tên đã tồn tại!';
-                }
-            } catch (e) { document.getElementById('rMsg').innerText = 'Lỗi mạng'; }
+        // ... [Giữ nguyên hàm postThought, logout, updateUserIcon, escapeHtml] ...
+        function updateUserIcon() {
+            const btn = document.getElementById('userIcon');
+            if (localStorage.getItem('token')) {
+                btn.innerText = '✍️'; 
+                btn.title = "Viết bài / Tài khoản";
+            } else {
+                btn.innerText = '👤';
+            }
         }
 
         async function postThought() {
@@ -221,11 +256,9 @@
                 body: JSON.stringify({content: content, book_title: title})
             });
             if (res.ok) { 
-                alert('Đã đăng!'); 
+                alert('Đã đăng!'); // Cái này giữ lại alert cũng được để user biết đã xong
                 closeModal(); 
-                document.getElementById('bookTitle').value = ''; // Clear form
-                document.getElementById('thoughtContent').value = '';
-                loadRandomThoughts(); // Reload feed
+                loadRandomThoughts();
             }
             else alert('Lỗi (Token hết hạn?)');
         }
@@ -234,10 +267,9 @@
             localStorage.clear();
             updateUserIcon();
             closeModal();
-            alert('Đã đăng xuất');
+            // alert('Đã đăng xuất'); // Bỏ alert này cho đỡ phiền nếu thích
         }
 
-        // Helper chống XSS khi render HTML
         function escapeHtml(text) {
             if (!text) return "";
             return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
