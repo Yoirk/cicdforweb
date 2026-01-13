@@ -8,7 +8,7 @@ services:
       - "443:443"
     depends_on:
       backend:
-        condition: service_healthy # Chỉ start Web khi Backend đã Healthy
+        condition: service_healthy
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./html:/usr/share/nginx/html:ro
@@ -21,7 +21,6 @@ services:
         tmpfs: {mode: 01777}
     user: "101"
     read_only: true
-    # Healthcheck cho Nginx
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost/"]
       interval: 30s
@@ -30,7 +29,7 @@ services:
       start_period: 5s
 
   backend:
-    build: ./backend
+    image: ghcr.io/yoirk/cicdforweb-backend:latest
     container_name: python_api
     restart: always
     expose:
@@ -48,7 +47,6 @@ services:
             limits:
                 cpus: '0.50'
                 memory: 200M
-    # Healthcheck native Python (Check port 8000 mở chưa)
     healthcheck:
       test: ["CMD", "python", "-c", "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); exit(0) if s.connect_ex(('localhost', 8000)) == 0 else exit(1)"]
       interval: 30s
