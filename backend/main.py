@@ -79,12 +79,14 @@ def add_thought(item: ThoughtCreate, token: str):
 
 @app.get("/thoughts/random")
 def get_random_thoughts():
-    # Lấy ngẫu nhiên 10 bài viết mới nhất
+    # GROUP BY book_title để mỗi cuốn sách là duy nhất
+    # Lấy ngẫu nhiên 8 cuốn (kệ 2 tầng x 4 cuốn)
     sql = """
-        SELECT t.content, t.book_title, u.username 
+        SELECT t.id, t.content, t.book_title, u.username 
         FROM thoughts t 
         JOIN users u ON t.user_id = u.id 
-        ORDER BY RANDOM() LIMIT 10
+        GROUP BY t.book_title 
+        ORDER BY RANDOM() LIMIT 8
     """
     with get_db() as conn:
         rows = conn.execute(sql).fetchall()
