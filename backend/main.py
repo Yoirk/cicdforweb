@@ -10,7 +10,7 @@ app = FastAPI()
 SECRET_KEY = os.getenv("SECRET_KEY", "dev_secret")
 ALGO = "HS256"
 DB_PATH = "/data/app.db"
-# SỬA Ở ĐÂY: Đổi sang argon2
+# Đổi sang argon2
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 def get_db():
@@ -76,6 +76,19 @@ def add_thought(item: ThoughtCreate, token: str):
                      (item.content, item.book_title, uid))
         conn.commit()
     return {"msg": "Saved"}
+
+@app.get("/thoughts/random")
+def get_random_thoughts():
+    # Lấy ngẫu nhiên 10 bài viết mới nhất
+    sql = """
+        SELECT t.content, t.book_title, u.username 
+        FROM thoughts t 
+        JOIN users u ON t.user_id = u.id 
+        ORDER BY RANDOM() LIMIT 10
+    """
+    with get_db() as conn:
+        rows = conn.execute(sql).fetchall()
+    return {"results": [dict(r) for r in rows]}
 
 @app.get("/thoughts/search")
 def search(q: str = ""):
