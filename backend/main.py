@@ -22,7 +22,7 @@ def get_db():
 os.makedirs("/data", exist_ok=True)
 with get_db() as conn:
     conn.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password_hash TEXT)')
-    conn.execute('CREATE TABLE IF NOT EXISTS thoughts (id INTEGER PRIMARY KEY, content TEXT, book_title TEXT, user_id INTEGER)')
+    conn.execute('CREATE TABLE IF NOT EXISTS thoughts (id INTEGER PRIMARY KEY, content TEXT, book_title TEXT, mood TEXT, user_id INTEGER)')
 
 # Models
 class UserAuth(BaseModel):
@@ -32,6 +32,7 @@ class UserAuth(BaseModel):
 class ThoughtCreate(BaseModel):
     content: str
     book_title: str
+    mood: str  
 
 # Helpers
 def create_token(data: dict):
@@ -72,17 +73,15 @@ def add_thought(item: ThoughtCreate, token: str):
     user = get_current_user(token)
     with get_db() as conn:
         uid = conn.execute("SELECT id FROM users WHERE username=?", (user,)).fetchone()['id']
-        conn.execute("INSERT INTO thoughts (content, book_title, user_id) VALUES (?, ?, ?)", 
-                     (item.content, item.book_title, uid))
+        conn.execute("INSERT INTO thoughts (content, book_title, mood, user_id) VALUES (?, ?, ?, ?)", 
+                     (item.content, item.book_title, item.mood, uid))
         conn.commit()
     return {"msg": "Saved"}
 
 @app.get("/thoughts/random")
 def get_random_thoughts():
-    # GROUP BY book_title để mỗi cuốn sách là duy nhất
-    # Lấy ngẫu nhiên 8 cuốn (kệ 2 tầng x 4 cuốn)
     sql = """
-        SELECT t.id, t.content, t.book_title, u.username 
+        SELECT t.id, t.content, t.book_title, t.mood, u.username 
         FROM thoughts t 
         JOIN users u ON t.user_id = u.id 
         GROUP BY t.book_title 
@@ -94,7 +93,7 @@ def get_random_thoughts():
 
 @app.get("/thoughts/search")
 def search(q: str = ""):
-    sql = "SELECT t.content, t.book_title, u.username FROM thoughts t JOIN users u ON t.user_id = u.id WHERE t.book_title LIKE ? OR t.content LIKE ? ORDER BY t.id DESC LIMIT 20"
+    sql = "SELECT t.content, t.book_title, t.mood, u.username FROM thoughts t JOIN users u ON t.user_id = u.id WHERE t.book_title LIKE ? OR t.content LIKE ? ORDER BY t.id DESC LIMIT 20"
     val = f"%{q}%"
     with get_db() as conn:
         rows = conn.execute(sql, (val, val)).fetchall()
