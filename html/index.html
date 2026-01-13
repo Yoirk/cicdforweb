@@ -2,18 +2,96 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>CI/CD Demo</title>
+    <title>Wandering Tomes</title>
     <style>
-        body { font-family: sans-serif; text-align: center; padding-top: 50px; background-color: #f0f2f5; }
-        h1 { color: #007bff; }
-        .info { margin-top: 20px; color: #555; }
+        body { font-family: monospace; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .box { border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; }
+        input, button { padding: 5px; margin: 5px 0; width: 100%; box-sizing: border-box; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
-    <h1> Hello World from GitHub Actions!</h1>
-    <div class="info">
-        <p>Deploy thành công trên VPS Ubuntu 22.04</p>
-        <p>Phiên bản: v1.0.0</p>
+    <h1>Wandering Tomes 📚</h1>
+    
+    <div class="box">
+        <h3>🔍 Tìm ý tưởng sách</h3>
+        <input type="text" id="searchInput" placeholder="Nhập tên sách...">
+        <button onclick="searchThoughts()">Tìm kiếm</button>
     </div>
+
+    <div id="results" class="box">
+        <i>Kết quả sẽ hiện ở đây...</i>
+    </div>
+
+    <div class="box">
+        <div id="loginForm">
+            <h3>🔑 Đăng nhập để viết</h3>
+            <input type="text" id="uUser" placeholder="Username">
+            <input type="password" id="uPass" placeholder="Password">
+            <button onclick="doLogin()">Login / Register</button>
+        </div>
+
+        <div id="postForm" class="hidden">
+            <h3>✍️ Chia sẻ suy nghĩ</h3>
+            <input type="text" id="bookTitle" placeholder="Tên cuốn sách">
+            <textarea id="thoughtContent" rows="3" style="width:100%" placeholder="Suy nghĩ của bạn..."></textarea>
+            <button onclick="postThought()">Gửi bài</button>
+            <button onclick="logout()" style="background:#eee">Logout</button>
+        </div>
+    </div>
+
+    <script>
+        let token = localStorage.getItem('token');
+        if (token) document.getElementById('loginForm').classList.add('hidden'), document.getElementById('postForm').classList.remove('hidden');
+
+        async function searchThoughts() {
+            let q = document.getElementById('searchInput').value;
+            let res = await fetch(`/api/thoughts/search?q=${q}`);
+            let data = await res.json();
+            let html = data.results.map(i => `<p><b>${i.username}</b> viết về <b>${i.book_title}</b>:<br>${i.content}</p><hr>`).join('');
+            document.getElementById('results').innerHTML = html || 'Không tìm thấy.';
+        }
+
+        async function doLogin() {
+            let u = document.getElementById('uUser').value;
+            let p = document.getElementById('uPass').value;
+            
+            // Thử đăng ký trước
+            await fetch('/api/register', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({username: u, password: p})
+            });
+
+            // Sau đó đăng nhập
+            let res = await fetch('/api/login', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({username: u, password: p})
+            });
+
+            if (res.ok) {
+                let data = await res.json();
+                localStorage.setItem('token', data.token);
+                location.reload();
+            } else {
+                alert('Lỗi đăng nhập');
+            }
+        }
+
+        async function postThought() {
+            let title = document.getElementById('bookTitle').value;
+            let content = document.getElementById('thoughtContent').value;
+            let res = await fetch(`/api/thoughts?token=${localStorage.getItem('token')}`, {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({content: content, book_title: title})
+            });
+            if (res.ok) { alert('Đã gửi!'); searchThoughts(); }
+            else alert('Lỗi gửi bài');
+        }
+        
+        function logout() { localStorage.removeItem('token'); location.reload(); }
+        
+        // Load random ban đầu
+        searchThoughts(); 
+    </script>
 </body>
 </html>

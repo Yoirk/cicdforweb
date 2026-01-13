@@ -1,26 +1,44 @@
 services:
   web:
-    # 1. Thay vì dùng image gốc, ta dùng Image của chính mình trên GHCR
-    # ${IMAGE_TAG} sẽ được truyền vào khi chạy lệnh deploy
-    image: ghcr.io/yoirk/cicdforweb:latest
-    
-    container_name: my-web-app
+    image: ghcr.io/yoirk/cicdforweb:latest # Hoặc build: .
+    container_name: web_proxy
     restart: always
     ports:
       - "80:80"
       - "443:443"
-    
+    depends_on:
+      - backend
     volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./html:/usr/share/nginx/html:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
-      
+      # Giữ nguyên các mount tmpfs cũ của bạn ở đây
       - type: tmpfs
         target: /tmp
-        tmpfs:
-          mode: 01777
+        tmpfs: {mode: 01777}
       - type: tmpfs
         target: /var/run
-        tmpfs:
-          mode: 01777
-          
+        tmpfs: {mode: 01777}
     user: "101"
     read_only: true
+
+  backend:
+    build: ./backend
+    container_name: python_api
+    restart: always
+    expose:
+      - "8000" # Chỉ nội bộ Docker thấy
+    volumes:
+      - sqlite_data:/data # Mount volume để lưu DB bền vững
+    environment:
+      - SECRET_KEY=thay_doi_khi_len_prod
+    user: "1001"
+    read_only: true # Hardening cho backend
+    deploy:
+        resources:
+            limits:
+                cpus: '0.50'
+                memory: 200M
+
+volumes:
+  sqlite_data:

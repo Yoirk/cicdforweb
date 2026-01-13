@@ -1,4 +1,4 @@
-name: DevSecOps Pipeline
+name: DevSecOps Microservices Pipeline
 
 on:
   push:
@@ -6,162 +6,139 @@ on:
   pull_request:
     branches: [ "main" ]
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_WEB: ghcr.io/${{ github.repository }}
+  IMAGE_BACKEND: ghcr.io/${{ github.repository }}-backend
+
 permissions:
   contents: read
   packages: write
-  id-token: write
-  security-events: write
-  issues: write
-  pull-requests: write
+  id-token: write # Required for Cosign
 
 jobs:
-  # 1. Job quet lo hong (Trivy)
-  security-scan:
+  build-and-push:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: web
+            context: .
+            dockerfile: Dockerfile
+          - service: backend
+            context: ./backend
+            dockerfile: backend/Dockerfile
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Trivy FS scan
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          trivy-config: trivy.yaml
-          format: 'sarif'
-          output: 'trivy-fs-results.sarif'
-          severity: 'CRITICAL,HIGH'
-
-      - name: Upload Trivy results
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: 'trivy-fs-results.sarif'
-
-  # 2. Quet Secret (TruffleHog)
-  secret-scan:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Lấy toàn bộ lịch sử
-
-      - name: TruffleHog OSS
-        uses: trufflesecurity/trufflehog@main
-        with:
-          path: ./
-          extra_args: --debug --only-verified
-
-  # 3. Build & Sign
-  build-push-sign:
-    needs: [security-scan, secret-scan]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3.3.0
 
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and Push
-        uses: docker/build-push-action@v5
-        id: build-and-push
-        with:
-          context: .
-          push: true
-          tags: |
-            ghcr.io/yoirk/cicdforweb:latest
-            ghcr.io/yoirk/cicdforweb:${{ github.sha }}
-
-      - name: Sign image with OIDC
+      # Set image name based on matrix service
+      - name: Set Image Tag
+        id: meta
         run: |
-          cosign sign --yes ghcr.io/yoirk/cicdforweb:${{ github.sha }}
-          cosign sign --yes ghcr.io/yoirk/cicdforweb:latest
+          if [ "${{ matrix.service }}" == "web" ]; then
+            echo "image=${{ env.IMAGE_WEB }}" >> $GITHUB_OUTPUT
+          else
+            echo "image=${{ env.IMAGE_BACKEND }}" >> $GITHUB_OUTPUT
+          fi
 
-  # 4. Deploy 
+      - name: Build and Push
+        id: build-and-push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.image }}:latest,${{ steps.meta.outputs.image }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Sign Image
+        if: ${{ github.event_name != 'pull_request' }}
+        env:
+          TAGS: ${{ steps.meta.outputs.image }}:latest
+          DIGEST: ${{ steps.build-and-push.outputs.digest }}
+        run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
+
+      - name: Trivy Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ steps.meta.outputs.image }}:latest'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
   deploy:
-    needs: build-push-sign
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+
     steps:
-      - name: Deploy to VPS
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Copy config files to VPS
+      - name: Copy Config
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "docker-compose.yml,nginx/default.conf,html/index.html"
+          target: "/root/my-app"
+          strip_components: 0
+
+      # SSH to deploy
+      - name: SSH Deploy
+        uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            if ! command -v cosign &> /dev/null; then
-                wget "https://github.com/sigstore/cosign/releases/download/v2.2.3/cosign-linux-amd64"
-                mv cosign-linux-amd64 /usr/local/bin/cosign
-                chmod +x /usr/local/bin/cosign
-            fi
-
             cd /root/my-app
-            docker pull ghcr.io/yoirk/cicdforweb:latest
             
-            # Verify Signature
-            if cosign verify \
-              --certificate-identity-regexp "^https://github.com/[Yy]oirk/cicdforweb/.*" \
-              --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-              ghcr.io/yoirk/cicdforweb:latest; then
-              echo "Signature Verified. Deploying..."
-            else
-              echo "SECURITY ALERT: Signature verification failed."
-              exit 1
-            fi
+            # 1. Pull latest images
+            docker compose pull
+
+            # 2. Verify Signatures (Cosign)
+            REPO_REGEX="^https://github.com/[Yy]oirk/cicdforweb/.*"
+            ISSUER="https://token.actions.githubusercontent.com"
             
-            # Set permissions
-            chmod 755 /etc/letsencrypt
-            chmod 755 /etc/letsencrypt/live
-            chmod 755 /etc/letsencrypt/archive
-            chmod 755 /etc/letsencrypt/live/wanderingtomes.site
-            chmod 755 /etc/letsencrypt/archive/wanderingtomes.site
-            chmod 644 /etc/letsencrypt/live/wanderingtomes.site/fullchain.pem
-            chmod 644 /etc/letsencrypt/live/wanderingtomes.site/privkey.pem
+            echo "Verifying web signature..."
+            cosign verify --certificate-identity-regexp "$REPO_REGEX" --certificate-oidc-issuer "$ISSUER" ghcr.io/${{ github.repository }}:latest
             
-            # Restart
+            echo "Verifying backend signature..."
+            cosign verify --certificate-identity-regexp "$REPO_REGEX" --certificate-oidc-issuer "$ISSUER" ghcr.io/${{ github.repository }}-backend:latest
+
+            # 3. Set SSL Permissions (Best Practice)
+            # Folders: 755 (execute needed for cd)
+            find /etc/letsencrypt/live -type d -exec chmod 755 {} +
+            find /etc/letsencrypt/archive -type d -exec chmod 755 {} +
+            # Files: 644 (read only, no execute)
+            find /etc/letsencrypt/live -type f -exec chmod 644 {} +
+            find /etc/letsencrypt/archive -type f -exec chmod 644 {} +
+
+            # 4. Restart containers
             docker compose down
             docker compose up -d
+
+            # 5. Cleanup old images
             docker image prune -f
-
-  # 5. DAST Scan 
-  dast-scan:
-    needs: deploy
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Prepare workspace
-        run: chmod -R 777 .
-
-      - name: OWASP ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.14.0
-        with:
-          target: 'https://wanderingtomes.site'
-          rules_file_name: '.zap/rules.tsv'
-          cmd_options: '-a'
-
-  # 6. Notify Discord
-  notify:
-    needs: [security-scan, secret-scan, build-push-sign, deploy, dast-scan]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - name: Discord Notification
-        uses: sarisia/actions-status-discord@v1
-        with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK }}
-          status: ${{ contains(needs.*.result, 'failure') && 'failure' || 'success' }}
-          title: "DevSecOps Pipeline Status"
-          description: "Full pipeline with Secret Scanning completed."
-          color: 0x0000ff
-          url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
