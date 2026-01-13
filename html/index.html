@@ -8,159 +8,225 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-        body { font-family: 'Courier New', Courier, monospace; margin: 0; background: #e9e0d2; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+        /* --- 1. ATMOSPHERE & BASE --- */
+        body { 
+            font-family: 'Georgia', serif; /* Font chữ có chân cho giống sách giấy */
+            margin: 0; 
+            background-color: #2c1e18; /* Màu tường tối */
+            /* Hiệu ứng đèn chiếu sáng trung tâm (Vignette) */
+            background-image: radial-gradient(circle at center, #4e342e 0%, #1a100c 100%);
+            height: 100vh; 
+            overflow: hidden; 
+            display: flex; 
+            flex-direction: column; 
+            color: #d7ccc8;
+        }
         
-        /* Header giữ nguyên */
-        header { background: #fff; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #5d4037; height: 60px; z-index: 100; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-        .header-btn { font-size: 1.4rem; cursor: pointer; background: none; border: none; transition: transform 0.2s; }
-        .header-btn:hover { transform: scale(1.1); }
+        /* --- 2. HEADER (Làm trong suốt để hòa vào nền) --- */
+        header { 
+            padding: 0 30px; 
+            display: flex; justify-content: space-between; align-items: center; 
+            height: 70px; z-index: 100; 
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .header-btn { 
+            font-size: 1.5rem; cursor: pointer; background: none; border: none; 
+            color: #bcaaa4; transition: all 0.3s; text-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+        .header-btn:hover { color: #fff; transform: scale(1.1); text-shadow: 0 0 10px #d7ccc8; }
         .header-right { display: flex; gap: 20px; }
 
-        /* --- BOOKSHELF STYLES --- */
-        .library-container {
+        /* --- 3. BOOKSHELF (KỆ SÁCH 3D) --- */
+        .room-container {
             flex-grow: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #e9e0d2; /* Màu tường */
-            padding: 20px;
-            position: relative;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            perspective: 1000px; /* Tạo chiều sâu 3D */
+            padding-bottom: 50px;
+        }
+
+        .bookshelf-shadow {
+            /* Bóng đổ lớn sau kệ để tạo cảm giác treo tường */
+            filter: drop-shadow(0 20px 30px rgba(0,0,0,0.8));
         }
 
         .bookshelf {
-            width: 800px;
-            max-width: 95%;
-            background: #5d4037; /* Màu gỗ đậm */
-            border: 10px solid #3e2723;
-            border-radius: 5px;
-            box-shadow: 10px 10px 20px rgba(0,0,0,0.3);
+            width: 800px; max-width: 90%;
+            background: #3e2723;
+            border: 12px solid #5d4037; /* Viền gỗ sáng hơn chút */
+            border-radius: 8px;
             display: grid;
-            grid-template-rows: 1fr 15px 1fr; /* Tầng 1 - Kệ gỗ - Tầng 2 */
-            padding: 20px;
+            grid-template-rows: 1fr 15px 1fr;
+            padding: 25px 30px;
+            /* Shadow tạo chiều sâu bên trong hộc tủ */
+            box-shadow: 
+                inset 0 0 50px rgba(0,0,0,0.7), /* Bóng trong */
+                0 0 0 2px #281a14; /* Viền nhỏ tối màu */
             position: relative;
-            transition: transform 0.5s ease-in-out, opacity 0.5s;
         }
 
-        /* Thanh gỗ ngăn giữa */
+        /* Vân gỗ (Texture giả bằng CSS gradient) */
+        .bookshelf::before {
+            content: ''; position: absolute; top:0; left:0; right:0; bottom:0;
+            background: repeating-linear-gradient(45deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 2px, transparent 2px, transparent 10px);
+            pointer-events: none;
+        }
+
         .shelf-divider {
-            background: #3e2723;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.5) inset;
-            height: 15px;
-            width: 100%;
+            background: #5d4037;
+            box-shadow: 0 5px 10px rgba(0,0,0,0.6);
+            height: 15px; width: 100%; border-radius: 2px;
+            position: relative; z-index: 2;
         }
 
         .shelf-row {
-            display: flex;
-            align-items: flex-end; /* Sách đứng trên kệ */
-            justify-content: space-around;
-            padding: 0 10px;
-            height: 220px; /* Chiều cao tầng kệ */
+            display: flex; align-items: flex-end; justify-content: space-around;
+            padding: 0 10px; height: 230px; position: relative;
+            transform-style: preserve-3d;
         }
 
-        /* --- THE BOOK --- */
-        .book {
-            width: 45px; /* Gáy sách */
-            height: 180px;
-            background: #8d6e63;
-            border-radius: 3px;
-            margin: 0 5px;
-            cursor: pointer;
-            transition: transform 0.2s, height 0.2s;
-            position: relative;
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+        /* --- 4. THE BOOK (CUỐN SÁCH TRÊN KỆ) --- */
+        .book-spine {
+            width: 45px; height: 190px;
+            border-radius: 3px; margin: 0 8px;
+            cursor: pointer; position: relative;
+            transform-origin: bottom center;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: -2px 0 5px rgba(0,0,0,0.4); /* Bóng gáy sách */
             
-            /* Text dọc gáy sách */
-            writing-mode: vertical-rl;
-            text-orientation: mixed;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 5px 0;
-            color: #fff;
-            font-weight: bold;
-            font-size: 0.9em;
-            text-shadow: 1px 1px 0 rgba(0,0,0,0.4);
-            overflow: hidden;
+            /* Text dọc */
+            writing-mode: vertical-rl; text-orientation: mixed;
+            display: flex; align-items: center; justify-content: center;
+            padding: 10px 0; color: rgba(255,255,255,0.9);
+            font-family: 'Courier New', monospace; font-weight: bold; font-size: 0.85em;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
+            border-left: 1px solid rgba(255,255,255,0.1); /* Hắt sáng cạnh trái */
         }
 
-        .book:hover {
-            transform: translateY(-5px) scale(1.05);
-            z-index: 10;
+        /* Hiệu ứng nhấc sách lên khi hover */
+        .book-spine:hover { transform: translateY(-15px) scale(1.05); z-index: 10; }
+
+        /* Màu ngẫu nhiên (tạo bằng nth-child) */
+        .book-spine:nth-child(5n+1) { background: linear-gradient(to right, #8e24aa, #6a1b9a); }
+        .book-spine:nth-child(5n+2) { background: linear-gradient(to right, #1e88e5, #1565c0); }
+        .book-spine:nth-child(5n+3) { background: linear-gradient(to right, #43a047, #2e7d32); }
+        .book-spine:nth-child(5n+4) { background: linear-gradient(to right, #e53935, #c62828); }
+        .book-spine:nth-child(5n+5) { background: linear-gradient(to right, #fb8c00, #ef6c00); }
+
+        /* --- 5. DECORATION (TRANG TRÍ) --- */
+        .plant-decor {
+            position: absolute; top: -55px; right: 20px;
+            font-size: 3rem; color: #66bb6a;
+            filter: drop-shadow(0 5px 5px rgba(0,0,0,0.5));
+            animation: sway 3s ease-in-out infinite alternate;
         }
+        @keyframes sway { from { transform: rotate(-5deg); } to { transform: rotate(5deg); } }
 
-        /* Random màu sách (CSS Variables) */
-        .book:nth-child(1n) { background: #c0392b; }
-        .book:nth-child(2n) { background: #2980b9; }
-        .book:nth-child(3n) { background: #27ae60; }
-        .book:nth-child(4n) { background: #8e44ad; }
-        .book:nth-child(5n) { background: #d35400; }
-
-        /* Nút đổi sách (Refresh) */
         .refresh-btn {
-            position: absolute;
-            right: -60px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: #5d4037;
-            color: #fff;
-            border: none;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            cursor: pointer;
-            font-size: 1.5rem;
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
-            transition: transform 0.3s;
+            position: absolute; right: -70px; top: 50%; transform: translateY(-50%);
+            background: #4e342e; color: #bcaaa4; border: 2px solid #5d4037;
+            width: 50px; height: 50px; border-radius: 50%; cursor: pointer;
+            font-size: 1.5rem; box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            transition: all 0.4s;
         }
-        .refresh-btn:hover { transform: translateY(-50%) rotate(180deg); }
+        .refresh-btn:hover { color: #fff; transform: translateY(-50%) rotate(180deg) scale(1.1); background: #5d4037; }
 
-        /* --- MODAL ĐỌC SÁCH (Book Open Effect) --- */
-        .modal-overlay {
+        /* --- 6. REAL 3D BOOK OPENING (HIỆU ỨNG LẬT SÁCH) --- */
+        .overlay-3d {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.7); display: none; 
-            justify-content: center; align-items: center; z-index: 200;
+            background: rgba(0,0,0,0.85); z-index: 200;
+            display: none; justify-content: center; align-items: center;
+            perspective: 1500px; /* Quan trọng để thấy 3D */
+            backdrop-filter: blur(5px);
         }
 
-        .opened-book {
-            background: #fff;
-            width: 600px;
-            height: 400px;
-            display: flex;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        .book-3d {
+            width: 300px; height: 450px;
             position: relative;
-            border-radius: 5px;
-            overflow: hidden;
-            animation: openBook 0.5s ease-out;
+            transform-style: preserve-3d;
+            transition: transform 1s ease;
+            cursor: default;
         }
 
-        @keyframes openBook {
-            from { transform: scale(0.1); opacity: 0; }
-            to { transform: scale(1); opacity: 1; }
+        /* Khi có class .open, sách sẽ xoay và mở ra */
+        .book-3d.open { transform: translateX(150px); } /* Dịch sang phải để chừa chỗ cho bìa mở */
+
+        /* Các thành phần cuốn sách 3D */
+        .layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            border-radius: 5px 10px 10px 5px;
+            background-color: #fff;
         }
 
-        .page {
-            flex: 1;
+        /* Bìa trước (Front Cover) */
+        .cover {
+            background: #5d4037; /* Màu bìa mặc định */
+            z-index: 2;
+            transform-origin: left; /* Xoay từ gáy trái */
+            transition: transform 1s cubic-bezier(0.645, 0.045, 0.355, 1); /* Hiệu ứng lật mượt */
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            padding: 20px; text-align: center; color: #fff;
+            box-shadow: inset 5px 0 10px rgba(0,0,0,0.2);
+            border: 2px solid rgba(255,255,255,0.1);
+        }
+        
+        .book-3d.open .cover { transform: rotateY(-135deg); } /* Mở ra 135 độ */
+
+        /* Trang giấy nội dung (Inside Page) */
+        .page-content {
+            z-index: 1;
+            background: #fff9e6; /* Màu giấy cũ */
+            color: #333;
             padding: 30px;
+            box-shadow: inset 10px 0 20px rgba(0,0,0,0.1); /* Bóng gáy sách */
             overflow-y: auto;
-            border-right: 1px solid #ccc;
-            background: #fffbf0; /* Màu giấy cũ */
-        }
-        .page.left { border-right: 2px solid #ddd; }
-        .page.right {  }
-
-        .book-close-btn {
-            position: absolute; top: 10px; right: 10px;
-            background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #555;
+            font-family: 'Georgia', serif; line-height: 1.6;
         }
 
-        /* --- Utility --- */
+        /* Gáy sách 3D (Spine) */
+        .spine-3d {
+            position: absolute; top: 0; left: 0; width: 40px; height: 100%;
+            background: #3e2723;
+            transform: rotateY(90deg) translateX(-20px); /* Đặt vuông góc */
+            transform-origin: left;
+        }
+
+        /* Text trên bìa */
+        .cover-title { font-size: 1.8em; font-weight: bold; margin-bottom: 10px; text-shadow: 1px 1px 2px #000; }
+        .cover-author { font-size: 1em; font-style: italic; opacity: 0.8; }
+
+        .close-read-btn {
+            position: absolute; top: -50px; right: -50px;
+            color: #fff; font-size: 2rem; cursor: pointer; background: none; border: none;
+            opacity: 0.7; transition: opacity 0.3s;
+        }
+        .close-read-btn:hover { opacity: 1; }
+
+        /* --- Utility Forms (Login/Post) - Style tối giản --- */
+        .form-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); z-index: 300; display: none;
+            justify-content: center; align-items: center;
+        }
+        .form-box {
+            background: #2c1e18; border: 1px solid #5d4037; padding: 40px; width: 350px;
+            color: #d7ccc8; border-radius: 5px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+        .form-box h3 { margin-top: 0; color: #fff; }
+        .form-box input, .form-box textarea {
+            width: 100%; padding: 12px; margin: 10px 0; background: #3e2723; border: none; color: #fff;
+            box-sizing: border-box; font-family: inherit;
+        }
+        .form-box button {
+            width: 100%; padding: 12px; background: #8d6e63; color: #fff; border: none;
+            font-weight: bold; cursor: pointer; margin-top: 10px; transition: background 0.3s;
+        }
+        .form-box button:hover { background: #a1887f; }
         .hidden { display: none; }
-        /* Modal Form (Login/Post) dùng lại CSS cũ nhưng chỉnh màu cho hợp theme gỗ */
-        .form-modal-content {
-            background: #fffbf0; border: 4px solid #5d4037; padding: 30px; width: 90%; max-width: 400px; position: relative;
-        }
-        input, textarea { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #8d6e63; background: #fff; }
-        button.action-btn { background: #5d4037; color: #fff; border: none; padding: 10px; width: 100%; cursor: pointer; }
+        .error { color: #ff8a80; font-size: 0.9em; margin-top: 5px; }
+        .success { color: #69f0ae; font-size: 0.9em; margin-top: 5px; }
+
     </style>
 </head>
 <body>
@@ -172,113 +238,228 @@
         </div>
     </header>
 
-    <div class="library-container">
-        <div class="bookshelf" id="bookshelf">
-            <div class="shelf-row" id="shelfRow1"></div>
-            <div class="shelf-divider"></div>
-            <div class="shelf-row" id="shelfRow2"></div>
+    <div class="room-container">
+        <div class="bookshelf-shadow">
+            <div class="bookshelf" id="bookshelf">
+                <div class="plant-decor"><i class="fa-solid fa-plant-wilt"></i></div>
+
+                <div class="shelf-row" id="shelfRow1"></div>
+                <div class="shelf-divider"></div>
+                <div class="shelf-row" id="shelfRow2"></div>
+                
+                <button class="refresh-btn" onclick="refreshShelf()" title="Đổi sách khác">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="overlay-3d" id="readOverlay">
+        <button class="close-read-btn" onclick="closeReadBook()"><i class="fa-solid fa-xmark"></i></button>
+        
+        <div class="book-3d" id="book3d">
+            <div class="layer cover" id="bookCover">
+                <div class="cover-title" id="coverTitle">Tên Sách</div>
+                <div class="cover-author" id="coverAuthor">Tác giả</div>
+                <div style="margin-top:20px; font-size: 2rem;">📖</div>
+            </div>
             
-            <button class="refresh-btn" onclick="refreshShelf()" title="Đổi sách khác">
-                <i class="fa-solid fa-arrows-rotate"></i>
-            </button>
-        </div>
-    </div>
-
-    <div class="modal-overlay" id="readModal">
-        <div class="opened-book">
-            <button class="book-close-btn" onclick="closeReadModal()"><i class="fa-solid fa-xmark"></i></button>
-            <div class="page left">
-                <h2 style="color: #d35400;" id="readTitle">Tên Sách</h2>
-                <p style="font-style: italic; color: #666;">Người viết: <b id="readAuthor">User</b></p>
-                <hr style="border-color: #d35400;">
-            </div>
-            <div class="page right">
-                <p id="readContent" style="line-height: 1.6; font-size: 1.1em;">Nội dung chi tiết...</p>
+            <div class="layer page-content">
+                <h3 style="color:#5d4037; border-bottom: 2px solid #5d4037; padding-bottom:10px; margin-top:0;" id="pageTitle">Tiêu đề</h3>
+                <p id="pageText" style="text-align: justify;">Nội dung...</p>
+                <p style="text-align: right; margin-top:30px; font-style: italic; color:#777;">― <span id="pageUser">User</span></p>
             </div>
         </div>
     </div>
 
-    <div class="modal-overlay" id="authModal">
-        <div class="form-modal-content">
-            <button style="position:absolute; right:10px; top:5px; border:none; background:none; font-size:1.5rem;" onclick="document.getElementById('authModal').style.display='none'">&times;</button>
-            <h3><i class="fa-solid fa-user"></i> Tài khoản</h3>
-            <p>Tính năng đăng nhập/viết bài (như cũ)...</p>
+    <div class="form-modal" id="authModal">
+        <div class="form-box">
+            <div style="text-align: right; margin-bottom: 10px;">
+                <i class="fa-solid fa-xmark" style="cursor: pointer;" onclick="closeAuthModal()"></i>
+            </div>
+            
+            <div id="loginForm">
+                <h3>Đăng nhập</h3>
+                <input type="text" id="lUser" placeholder="Username">
+                <input type="password" id="lPass" placeholder="Password">
+                <button onclick="doLogin()">Vào đọc sách</button>
+                <p style="font-size: 0.9em;">Chưa có thẻ thư viện? <a href="#" style="color:#bcaaa4" onclick="switchForm('register')">Đăng ký</a></p>
+                <p id="lMsg" class="error"></p>
+            </div>
+
+            <div id="registerForm" class="hidden">
+                <h3>Đăng ký thẻ</h3>
+                <input type="text" id="rUser" placeholder="Tên mới">
+                <input type="password" id="rPass" placeholder="Mật khẩu">
+                <button onclick="doRegister()">Đăng ký</button>
+                <p style="font-size: 0.9em;"><a href="#" style="color:#bcaaa4" onclick="switchForm('login')">Quay lại đăng nhập</a></p>
+                <p id="rMsg" class="error"></p>
+            </div>
+
+            <div id="profileForm" class="hidden">
+                <i class="fa-solid fa-user-astronaut" style="font-size: 3rem; margin-bottom: 20px;"></i>
+                <h3 id="profileName">User</h3>
+                <button onclick="switchForm('post')">Viết suy nghĩ mới</button>
+                <button style="background: transparent; border: 1px solid #8d6e63;" onclick="logout()">Đăng xuất</button>
+            </div>
+
+            <div id="postForm" class="hidden">
+                <h3>Viết vào nhật ký</h3>
+                <input type="text" id="bookTitle" placeholder="Tên sách">
+                <textarea id="thoughtContent" rows="5" placeholder="Cảm nghĩ của bạn..."></textarea>
+                <button onclick="postThought()">Lưu lại</button>
+                <p style="font-size: 0.9em;"><a href="#" style="color:#bcaaa4" onclick="switchForm('profile')">Quay lại</a></p>
+                <p id="pMsg" class="error"></p>
+            </div>
         </div>
     </div>
 
     <script>
+        // Init
+        const token = localStorage.getItem('token');
         loadBooks();
 
+        // --- Logic Kệ sách ---
         async function loadBooks() {
             try {
-                // Hiệu ứng Fade out kệ sách cũ
                 const shelf = document.getElementById('bookshelf');
-                shelf.style.opacity = '0';
+                shelf.style.opacity = '0.5'; // Làm mờ nhẹ khi đang load
                 
-                // Gọi API lấy sách (đã sửa backend để GROUP BY)
                 let res = await fetch('/api/thoughts/random');
                 let data = await res.json();
                 
                 setTimeout(() => {
                     renderShelf(data.results);
-                    shelf.style.opacity = '1'; // Fade in
-                }, 500);
-
+                    shelf.style.opacity = '1';
+                }, 300);
             } catch (e) { console.error(e); }
         }
 
         function renderShelf(books) {
             const row1 = document.getElementById('shelfRow1');
             const row2 = document.getElementById('shelfRow2');
-            row1.innerHTML = '';
-            row2.innerHTML = '';
+            row1.innerHTML = ''; row2.innerHTML = '';
 
-            // Chia sách vào 2 tầng
-            books.forEach((book, index) => {
+            // Nếu ít sách quá thì nhân bản lên cho đầy kệ
+            let displayBooks = books;
+            if(displayBooks.length < 8) displayBooks = [...books, ...books]; 
+            displayBooks = displayBooks.slice(0, 10); // Max 10 cuốn
+
+            displayBooks.forEach((book, index) => {
                 const bookEl = document.createElement('div');
-                bookEl.className = 'book';
-                // Random độ cao sách cho tự nhiên (160px - 190px)
-                const height = Math.floor(Math.random() * 30) + 160;
-                bookEl.style.height = `${height}px`;
+                bookEl.className = 'book-spine';
                 
-                // Tên sách trên gáy
-                bookEl.innerText = book.book_title.length > 20 ? book.book_title.substring(0,18)+'...' : book.book_title;
+                // Random chiều cao
+                const h = Math.floor(Math.random() * 40) + 180; 
+                bookEl.style.height = `${h}px`;
+                bookEl.innerText = book.book_title.substring(0, 20);
                 
-                // Sự kiện Click -> Mở sách
-                // Cần encode JSON object để tránh lỗi ký tự đặc biệt
-                bookEl.onclick = () => openBook(book);
+                // Click -> Mở sách 3D
+                // Cần clone object để tránh lỗi tham chiếu
+                const bookData = {...book}; 
+                bookEl.onclick = () => openReadBook(bookData, index);
 
-                if (index < 4) row1.appendChild(bookEl);
+                if (index < 5) row1.appendChild(bookEl);
                 else row2.appendChild(bookEl);
             });
         }
 
-        function openBook(book) {
-            document.getElementById('readTitle').innerText = book.book_title;
-            document.getElementById('readAuthor').innerText = book.username;
-            document.getElementById('readContent').innerText = book.content;
-            document.getElementById('readModal').style.display = 'flex';
+        // --- Logic Đọc sách 3D ---
+        function openReadBook(book, index) {
+            const overlay = document.getElementById('readOverlay');
+            const book3d = document.getElementById('book3d');
+            
+            // 1. Fill dữ liệu
+            document.getElementById('coverTitle').innerText = book.book_title;
+            document.getElementById('coverAuthor').innerText = book.username;
+            document.getElementById('pageTitle').innerText = book.book_title;
+            document.getElementById('pageText').innerText = book.content;
+            document.getElementById('pageUser').innerText = book.username;
+
+            // 2. Set màu bìa (Lấy theo màu của gáy sách dựa vào index để đồng bộ)
+            // Ta hardcode lại logic màu giống CSS nth-child
+            const colors = [
+                'linear-gradient(to right, #8e24aa, #6a1b9a)',
+                'linear-gradient(to right, #1e88e5, #1565c0)',
+                'linear-gradient(to right, #43a047, #2e7d32)',
+                'linear-gradient(to right, #e53935, #c62828)',
+                'linear-gradient(to right, #fb8c00, #ef6c00)'
+            ];
+            // Lấy màu tương ứng (index % 5)
+            document.getElementById('bookCover').style.background = colors[index % 5];
+
+            // 3. Hiện overlay
+            overlay.style.display = 'flex';
+            
+            // 4. Trigger Animation mở sách (Delay 1 xíu để CSS transition bắt được)
+            setTimeout(() => {
+                book3d.classList.add('open');
+            }, 100);
         }
 
-        function closeReadModal() {
-            document.getElementById('readModal').style.display = 'none';
+        function closeReadBook() {
+            const book3d = document.getElementById('book3d');
+            const overlay = document.getElementById('readOverlay');
+            
+            // Đóng sách trước
+            book3d.classList.remove('open');
+            
+            // Đợi đóng xong mới ẩn overlay
+            setTimeout(() => {
+                overlay.style.display = 'none';
+            }, 800); // 800ms khớp với transition CSS
         }
 
         function refreshShelf() {
-            // Xoay nhẹ kệ sách hoặc làm hiệu ứng trượt (ở đây dùng opacity cho đơn giản)
+            // Xoay nhẹ nút refresh
+            const btn = document.querySelector('.refresh-btn');
+            btn.style.transform = 'translateY(-50%) rotate(360deg)';
+            setTimeout(() => btn.style.transform = 'translateY(-50%)', 500);
             loadBooks();
         }
 
+        // --- Logic Auth (Giữ nguyên logic cũ, chỉ đổi UI) ---
         function openAuthModal() {
             document.getElementById('authModal').style.display = 'flex';
+            if (localStorage.getItem('token')) {
+                switchForm('profile');
+                document.getElementById('profileName').innerText = localStorage.getItem('user');
+            } else { switchForm('login'); }
+        }
+        function closeAuthModal() { document.getElementById('authModal').style.display = 'none'; }
+        
+        function switchForm(type) {
+            ['loginForm', 'registerForm', 'profileForm', 'postForm'].forEach(id => document.getElementById(id).classList.add('hidden'));
+            document.getElementById(type + 'Form').classList.remove('hidden');
+            ['lMsg', 'rMsg', 'pMsg'].forEach(el => el.innerText = '');
         }
 
-        // Đóng modal khi click ngoài
-        window.onclick = function(e) {
-            if (e.target.classList.contains('modal-overlay')) {
-                e.target.style.display = 'none';
-            }
+        // API Calls (Rút gọn)
+        async function doLogin() {
+            let u = document.getElementById('lUser').value, p = document.getElementById('lPass').value;
+            try {
+                let res = await fetch('/api/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+                if(res.ok) { let d=await res.json(); localStorage.setItem('token',d.token); localStorage.setItem('user',u); switchForm('profile'); document.getElementById('profileName').innerText=u;}
+                else document.getElementById('lMsg').innerText='Sai thông tin!';
+            } catch(e){}
         }
+        async function doRegister() {
+            let u = document.getElementById('rUser').value, p = document.getElementById('rPass').value;
+            try {
+                let res = await fetch('/api/register', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+                if(res.ok) { switchForm('login'); document.getElementById('lMsg').innerText='Đăng ký thành công!'; document.getElementById('lMsg').className='success'; }
+                else document.getElementById('rMsg').innerText='Tên đã tồn tại!';
+            } catch(e){}
+        }
+        async function postThought() {
+            let t = document.getElementById('bookTitle').value, c = document.getElementById('thoughtContent').value;
+            try {
+                let res = await fetch(`/api/thoughts?token=${localStorage.getItem('token')}`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:c,book_title:t})});
+                if(res.ok) { closeAuthModal(); loadBooks(); alert('Đã lưu vào kệ sách!'); }
+                else document.getElementById('pMsg').innerText='Lỗi (Hết hạn phiên?)';
+            } catch(e){}
+        }
+        function logout(){ localStorage.clear(); closeAuthModal(); }
     </script>
 </body>
 </html>
