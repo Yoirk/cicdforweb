@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wandering Tomes</title>
     <style>
-        /* --- GIỮ NGUYÊN CSS CŨ (Minimal Style) --- */
-        body { font-family: monospace; margin: 0; padding: 0; background: #f4f4f4; }
+        /* --- Base Styles --- */
+        body { font-family: monospace; margin: 0; padding: 0; background: #f4f4f4; overflow-x: hidden; }
         
         header {
             background: #fff; padding: 15px 20px; 
@@ -14,17 +14,64 @@
             border-bottom: 2px solid #333; position: sticky; top: 0; z-index: 100;
         }
         h1 { margin: 0; font-size: 1.5rem; cursor: pointer; }
+        
+        /* User Icon: Luôn là hình người, chỉ dùng để xem info */
         .user-btn { font-size: 1.5rem; cursor: pointer; background: none; border: none; }
 
-        .container { max-width: 800px; margin: 20px auto; padding: 0 15px; }
+        /* --- FLOATING ACTION BUTTON (Nút Bong Bóng) --- */
+        .fab-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background-color: #333;
+            color: #fff;
+            border-radius: 50%;
+            border: none;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            font-size: 1.8rem;
+            cursor: pointer;
+            z-index: 150;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.2s, background 0.2s;
+        }
+        .fab-btn:hover {
+            transform: scale(1.1); /* Phóng to nhẹ khi rê chuột */
+            background-color: #000;
+        }
+
+        /* --- STREAM FLOW STYLES --- */
+        .stream-container {
+            width: 100%;
+            padding: 50px 0;
+            overflow: hidden;
+            position: relative;
+        }
+        .stream-track {
+            display: flex;
+            gap: 30px;
+            width: max-content;
+            animation: flow 40s linear infinite;
+        }
+        .stream-track:hover { animation-play-state: paused; }
+        @keyframes flow {
+            0% { transform: translateX(100vw); }
+            100% { transform: translateX(-100%); }
+        }
         .card { 
             background: #fff; border: 1px solid #333; padding: 20px; 
-            margin-bottom: 20px; box-shadow: 4px 4px 0 #333; 
+            width: 300px; flex-shrink: 0; box-shadow: 6px 6px 0 #333; 
+            white-space: normal; display: flex; flex-direction: column; justify-content: space-between;
         }
-        .book-title { font-weight: bold; font-size: 1.1em; color: #d35400; }
-        .author { font-size: 0.8em; color: #666; margin-top: 10px; display: block; }
-        .empty-msg { text-align: center; color: #777; margin-top: 50px; }
+        .book-title { font-weight: bold; font-size: 1.1em; color: #d35400; margin-bottom: 10px; }
+        .content-text { flex-grow: 1; font-size: 0.95em; line-height: 1.5; }
+        .author { font-size: 0.8em; color: #666; margin-top: 15px; text-align: right; font-style: italic; }
+        .empty-msg { text-align: center; color: #777; width: 100vw; }
 
+        /* --- Modal & Form Styles --- */
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.5); display: none; 
@@ -43,27 +90,32 @@
             width: 100%; padding: 10px; margin: 10px 0; 
             box-sizing: border-box; border: 1px solid #ccc; 
         }
-        button.action-btn { 
-            background: #333; color: #fff; cursor: pointer; border: none; font-weight: bold;
-        }
+        button.action-btn { background: #333; color: #fff; cursor: pointer; border: none; font-weight: bold; }
         button.action-btn:hover { background: #555; }
         .link-btn { color: blue; text-decoration: underline; cursor: pointer; border: none; background: none;}
-        .hidden { display: none; }
         
-        /* --- CẬP NHẬT CSS MỚI --- */
+        .hidden { display: none; }
         .error { color: red; font-size: 0.9em; margin-top: 5px; }
-        .success { color: green; font-size: 0.9em; margin-top: 5px; font-weight: bold; } /* Style cho thông báo thành công */
+        .success { color: green; font-size: 0.9em; margin-top: 5px; font-weight: bold; }
+        
+        /* Style riêng cho trang thông tin User */
+        .profile-info { text-align: center; margin-bottom: 20px; }
+        .profile-avatar { font-size: 3rem; display: block; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
     <header>
         <h1 onclick="loadRandomThoughts()">📚 Wandering Tomes</h1>
-        <button class="user-btn" onclick="openModal()" id="userIcon">👤</button>
+        <button class="user-btn" onclick="handleUserIconClick()">👤</button>
     </header>
 
-    <div class="container" id="feed">
-        <div class="empty-msg">Đang tải những dòng suy nghĩ...</div>
+    <button class="fab-btn" onclick="handleFabClick()" title="Viết bài mới">✎</button>
+
+    <div class="stream-container" id="feedContainer">
+        <div class="stream-track" id="feedTrack">
+            <div class="empty-msg">Đang khơi dòng suy nghĩ...</div>
+        </div>
     </div>
 
     <div class="modal-overlay" id="authModal">
@@ -90,68 +142,70 @@
 
             <div id="postForm" class="hidden">
                 <h3>✍️ Chia sẻ suy nghĩ</h3>
-                <p>Xin chào, <b id="welcomeUser"></b>!</p>
                 <input type="text" id="bookTitle" placeholder="Tên cuốn sách tâm đắc">
                 <textarea id="thoughtContent" rows="5" placeholder="Bạn nghĩ gì về nó?"></textarea>
-                <button class="action-btn" onclick="postThought()">Đăng bài</button>
+                <button class="action-btn" onclick="postThought()">Thả trôi dòng suy nghĩ</button>
+                <p id="pMsg" class="error"></p>
+            </div>
+
+            <div id="profileForm" class="hidden">
+                <h3>Hồ sơ người dùng</h3>
+                <div class="profile-info">
+                    <span class="profile-avatar">👤</span>
+                    <p>Xin chào, <b id="profileName">User</b>!</p>
+                </div>
                 <button class="action-btn" style="background:#ccc; color:#000" onclick="logout()">Đăng xuất</button>
             </div>
         </div>
     </div>
 
     <script>
-        const token = localStorage.getItem('token');
-        const currentUser = localStorage.getItem('user');
-        
+        // Init
         loadRandomThoughts();
-        updateUserIcon();
 
-        // --- Logic Hiển thị ---
-        async function loadRandomThoughts() {
-            try {
-                let res = await fetch('/api/thoughts/random');
-                let data = await res.json();
-                renderFeed(data.results);
-            } catch (e) { console.error(e); }
-        }
-
-        function renderFeed(items) {
-            const feed = document.getElementById('feed');
-            if (!items || items.length === 0) {
-                feed.innerHTML = '<div class="empty-msg">Chưa có bài viết nào. Hãy là người đầu tiên!</div>';
-                return;
-            }
-            feed.innerHTML = items.map(i => `
-                <div class="card">
-                    <div class="book-title">📖 ${escapeHtml(i.book_title)}</div>
-                    <p>${escapeHtml(i.content)}</p>
-                    <small class="author">― ${escapeHtml(i.username)}</small>
-                </div>
-            `).join('');
-        }
-
-        // --- Modal & Form Logic (Đã cập nhật) ---
+        // --- Logic Xử lý sự kiện Click ---
         
-        // Hàm mới: Xóa trắng toàn bộ input và thông báo
-        function clearInputs() {
-            document.querySelectorAll('input').forEach(input => input.value = '');
-            // Xóa nội dung thông báo
-            document.getElementById('lMsg').innerText = ''; 
-            document.getElementById('lMsg').className = ''; // Reset class (bỏ error/success)
-            document.getElementById('rMsg').innerText = '';
-        }
-
-        function openModal() {
-            // Xóa trắng mỗi khi mở modal
+        // 1. Khi bấm vào User Icon trên Header
+        function handleUserIconClick() {
             clearInputs();
             document.getElementById('authModal').style.display = 'flex';
             
             if (localStorage.getItem('token')) {
-                switchForm('post', false); // false = không clear input lần nữa
-                document.getElementById('welcomeUser').innerText = localStorage.getItem('user');
+                // Đã login -> Hiện Profile
+                switchForm('profile', false);
+                document.getElementById('profileName').innerText = localStorage.getItem('user');
             } else {
+                // Chưa login -> Hiện Login
                 switchForm('login', false);
             }
+        }
+
+        // 2. Khi bấm vào Nút FAB (Viết bài)
+        function handleFabClick() {
+            clearInputs();
+            document.getElementById('authModal').style.display = 'flex';
+
+            if (localStorage.getItem('token')) {
+                // Đã login -> Hiện Form Viết bài
+                switchForm('post', false);
+            } else {
+                // Chưa login -> Hiện Login (kèm thông báo nhắc nhở)
+                switchForm('login', false);
+                // Nhắc user cần login để viết
+                let msg = document.getElementById('lMsg');
+                msg.innerText = "Bạn cần đăng nhập để viết bài nhé!";
+                msg.className = 'error'; 
+            }
+        }
+
+        // --- Các Logic cũ (Stream, API) giữ nguyên ---
+        
+        function clearInputs() {
+            document.querySelectorAll('input, textarea').forEach(input => input.value = '');
+            ['lMsg', 'rMsg', 'pMsg'].forEach(id => {
+                const el = document.getElementById(id);
+                if(el) { el.innerText = ''; el.className = ''; }
+            });
         }
 
         function closeModal() {
@@ -162,58 +216,68 @@
             if (e.target === this) closeModal();
         });
 
-        // Cập nhật hàm switchForm để hỗ trợ clear input
         function switchForm(type, shouldClear = true) {
-            if(shouldClear) clearInputs(); // Xóa dữ liệu cũ khi chuyển tab
-
-            ['loginForm', 'registerForm', 'postForm'].forEach(id => document.getElementById(id).classList.add('hidden'));
+            if(shouldClear) clearInputs();
+            // Ẩn tất cả form
+            ['loginForm', 'registerForm', 'postForm', 'profileForm'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            // Hiện form cần thiết
             document.getElementById(type + 'Form').classList.remove('hidden');
         }
 
-        // --- API Calls (Cập nhật Logic thông báo) ---
+        // --- API Calls ---
+        async function loadRandomThoughts() {
+            try {
+                let res = await fetch('/api/thoughts/random');
+                let data = await res.json();
+                renderFeed(data.results);
+            } catch (e) { console.error(e); }
+        }
+
+        function renderFeed(items) {
+            const track = document.getElementById('feedTrack');
+            if (!items || items.length === 0) {
+                track.innerHTML = '<div class="empty-msg">Dòng sông đang tĩnh lặng...</div>';
+                return;
+            }
+            const cardsHtml = items.map(i => `
+                <div class="card">
+                    <div class="book-title">📖 ${escapeHtml(i.book_title)}</div>
+                    <div class="content-text">${escapeHtml(i.content)}</div>
+                    <small class="author">― ${escapeHtml(i.username)}</small>
+                </div>
+            `).join('');
+            track.innerHTML = cardsHtml + cardsHtml; 
+        }
+
         async function doRegister() {
             let u = document.getElementById('rUser').value;
             let p = document.getElementById('rPass').value;
-            
-            // Validate sơ bộ
-            if(!u || !p) {
-                document.getElementById('rMsg').innerText = 'Vui lòng điền đủ thông tin';
-                return;
-            }
-
+            if(!u || !p) { document.getElementById('rMsg').innerText = 'Thiếu thông tin rồi'; return; }
             try {
                 let res = await fetch('/api/register', {
                     method: 'POST', headers: {'Content-Type':'application/json'},
                     body: JSON.stringify({username: u, password: p})
                 });
-
                 if (res.ok) {
-                    // 1. Chuyển về form Login
                     switchForm('login'); 
-                    
-                    // 2. Hiển thị thông báo thành công màu xanh (thay vì alert)
-                    let msgBox = document.getElementById('lMsg');
-                    msgBox.innerText = 'Đăng ký thành công! Hãy đăng nhập ngay.';
-                    msgBox.className = 'success'; // Thêm class màu xanh
-                    
-                    // 3. Điền sẵn username vừa đăng ký cho tiện (Optional - UX tốt)
+                    let msg = document.getElementById('lMsg');
+                    msg.innerText = 'Đăng ký thành công! Mời bạn vào.';
+                    msg.className = 'success';
                     document.getElementById('lUser').value = u;
                 } else {
-                    document.getElementById('rMsg').innerText = 'Tên đăng nhập đã tồn tại!';
+                    document.getElementById('rMsg').innerText = 'Tên này đã có người dùng.';
                     document.getElementById('rMsg').className = 'error';
                 }
-            } catch (e) { 
-                document.getElementById('rMsg').innerText = 'Lỗi kết nối Server';
-            }
+            } catch (e) { document.getElementById('rMsg').innerText = 'Lỗi kết nối'; }
         }
 
         async function doLogin() {
             let u = document.getElementById('lUser').value;
             let p = document.getElementById('lPass').value;
-            let msgBox = document.getElementById('lMsg');
-            
-            msgBox.innerText = 'Đang xử lý...';
-            msgBox.className = ''; // Reset màu
+            let msg = document.getElementById('lMsg');
+            msg.innerText = 'Đang kiểm tra...'; msg.className = '';
 
             try {
                 let res = await fetch('/api/login', {
@@ -224,50 +288,46 @@
                     let data = await res.json();
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('user', u);
-                    updateUserIcon();
-                    switchForm('post');
-                    document.getElementById('welcomeUser').innerText = u;
+                    
+                    // Logic mới: Login xong thì đóng modal luôn (hoặc chuyển sang Profile nếu muốn)
+                    // Ở đây mình chọn đóng modal để user tiếp tục xem bài
+                    closeModal(); 
+                    
+                    // Nếu login từ nút FAB, có thể muốn mở lại form Post? 
+                    // Để đơn giản và "chill", cứ đóng modal đã. User muốn viết thì bấm FAB lại.
                 } else {
-                    msgBox.innerText = 'Sai tài khoản hoặc mật khẩu!';
-                    msgBox.className = 'error'; // Màu đỏ
+                    msg.innerText = 'Sai tên hoặc mật khẩu rồi!';
+                    msg.className = 'error';
                 }
             } catch (e) { 
-                msgBox.innerText = 'Lỗi kết nối';
-                msgBox.className = 'error';
-            }
-        }
-
-        // ... [Giữ nguyên hàm postThought, logout, updateUserIcon, escapeHtml] ...
-        function updateUserIcon() {
-            const btn = document.getElementById('userIcon');
-            if (localStorage.getItem('token')) {
-                btn.innerText = '✍️'; 
-                btn.title = "Viết bài / Tài khoản";
-            } else {
-                btn.innerText = '👤';
+                msg.innerText = 'Lỗi kết nối'; msg.className = 'error';
             }
         }
 
         async function postThought() {
             let title = document.getElementById('bookTitle').value;
             let content = document.getElementById('thoughtContent').value;
-            let res = await fetch(`/api/thoughts?token=${localStorage.getItem('token')}`, {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({content: content, book_title: title})
-            });
-            if (res.ok) { 
-                alert('Đã đăng!'); // Cái này giữ lại alert cũng được để user biết đã xong
-                closeModal(); 
-                loadRandomThoughts();
-            }
-            else alert('Lỗi (Token hết hạn?)');
+            let pMsg = document.getElementById('pMsg');
+
+            if(!title || !content) { pMsg.innerText = "Hãy viết gì đó nhé."; return; }
+
+            try {
+                let res = await fetch(`/api/thoughts?token=${localStorage.getItem('token')}`, {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({content: content, book_title: title})
+                });
+                if (res.ok) { 
+                    closeModal(); 
+                    loadRandomThoughts();
+                } else {
+                    pMsg.innerText = "Lỗi xác thực (Hết hạn phiên?).";
+                }
+            } catch (e) { pMsg.innerText = "Lỗi kết nối."; }
         }
 
         function logout() {
             localStorage.clear();
-            updateUserIcon();
             closeModal();
-            // alert('Đã đăng xuất'); // Bỏ alert này cho đỡ phiền nếu thích
         }
 
         function escapeHtml(text) {
