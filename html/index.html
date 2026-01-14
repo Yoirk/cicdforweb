@@ -110,7 +110,7 @@
         </button>
     </div>
 
-    <div id="readModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-xl hidden opacity-0 transition-opacity duration-500 flex items-center justify-center p-4" onclick="closeRead()">
+    <div id="readModal" class="fixed inset-0 z-[100] bg-black/80 backdrop-blur-xl hidden opacity-0 transition-opacity duration-500 flex items-center justify-center p-4" onclick="closeRead()">
         <div class="max-w-2xl w-full" onclick="event.stopPropagation()">
             <div class="text-center mb-8">
                 <p class="text-purple-300 text-sm tracking-[0.3em] uppercase mb-2" id="readAuthor">Unknown</p>
@@ -190,6 +190,34 @@
             <button onclick="doLogout()" class="text-red-400 hover:text-red-300 text-sm tracking-widest uppercase border border-red-500/30 px-6 py-2 rounded hover:bg-red-500/10 transition">
                 Disconnect Soul (Logout)
             </button>
+        </div>
+    </div>
+
+    <div id="searchModal" class="fixed inset-0 z-50 bg-[#0f0c29]/90 hidden flex flex-col items-center justify-center transition-all duration-300">
+        <button onclick="closeSearch()" class="absolute top-8 right-8 text-gray-500 hover:text-white text-2xl"><i class="fa-solid fa-xmark"></i></button>
+        
+        <div class="w-full max-w-xl px-6 text-center animate-float">
+            <h2 class="font-serif text-3xl text-purple-200 mb-8 tracking-widest">SEEK THE VOID</h2>
+            <input type="text" id="searchInput" placeholder="What memory do you seek?" 
+                class="w-full bg-transparent border-b-2 border-purple-500/30 text-center text-2xl text-white py-4 focus:border-purple-500 outline-none transition placeholder-gray-700 font-serif"
+                onkeypress="handleSearchEnter(event)">
+            
+            <button onclick="doSearch()" class="mt-12 px-8 py-3 rounded-full bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/50 text-purple-200 transition uppercase tracking-widest text-sm">
+                Find
+            </button>
+        </div>
+    </div>
+
+    <div id="confirmModal" class="fixed inset-0 z-[70] bg-black/90 hidden flex items-center justify-center backdrop-blur-sm">
+        <div class="glass p-8 rounded-xl max-w-sm text-center border border-red-500/30 shadow-[0_0_30px_rgba(220,38,38,0.2)]">
+            <div class="text-4xl mb-4 text-red-400"><i class="fa-solid fa-power-off"></i></div>
+            <h3 class="text-xl text-white font-serif mb-2">Disconnect?</h3>
+            <p class="text-gray-400 text-sm mb-8">Are you sure you want to leave the void?</p>
+            
+            <div class="flex gap-4 justify-center">
+                <button onclick="closeConfirm()" class="px-6 py-2 rounded border border-gray-600 text-gray-400 hover:text-white hover:border-white transition text-xs uppercase">Stay</button>
+                <button onclick="confirmLogout()" class="px-6 py-2 rounded bg-red-900/30 border border-red-500/50 text-red-300 hover:bg-red-500 hover:text-white transition text-xs uppercase">Leave</button>
+            </div>
         </div>
     </div>
 
@@ -385,65 +413,79 @@
         }
 
         function doLogout() {
-            if(confirm("Are you sure you want to leave the void?")) {
-                localStorage.clear();
-                location.reload();
-            }
+            document.getElementById('confirmModal').classList.remove('hidden');
+        }
+
+        function closeConfirm() {
+            document.getElementById('confirmModal').classList.add('hidden');
+        }
+
+        function confirmLogout() {
+            localStorage.clear();
+            location.reload();
         }
 
         async function loadMyThoughts() {
             const list = document.getElementById('myThoughtsList');
             const emptyMsg = document.getElementById('myEmptyMsg');
             
-            list.innerHTML = '<div class="col-span-full text-center text-purple-300 animate-pulse">Recalling memories...</div>';
+            // 1. Reset giao diện và hiện Loading
+            list.innerHTML = ''; 
             emptyMsg.classList.add('hidden');
+            
+            // Tạo hiệu ứng loading tạm thời
+            const loader = document.createElement('div');
+            loader.className = 'col-span-full text-center text-purple-300 animate-pulse font-serif tracking-widest mt-10';
+            loader.innerText = 'Summoning past echoes...';
+            loader.id = 'profileLoader';
+            list.appendChild(loader);
 
             try {
-                // Gọi API mới
+                // 2. Gọi API lấy bài viết của tôi
                 let res = await fetch(`/api/thoughts/mine?token=${localStorage.getItem('token')}`);
                 
-                if(!res.ok) { // Nếu token lỗi -> Logout luôn
-                    localStorage.clear();
-                    location.reload();
+                // Xử lý lỗi token hết hạn
+                if(!res.ok) {
+                    if(res.status === 401) {
+                        localStorage.clear();
+                        location.reload();
+                    }
                     return;
                 }
 
                 let data = await res.json();
-                list.innerHTML = ''; // Xóa loading
+                
+                // Xóa loading sau khi có dữ liệu
+                const loadEl = document.getElementById('profileLoader');
+                if(loadEl) loadEl.remove();
 
+                // 3. Xử lý khi chưa có bài viết nào
                 if(data.results.length === 0) {
                     emptyMsg.classList.remove('hidden');
                     return;
                 }
 
-                // Render từng thẻ bài (giống trang chủ nhưng nhỏ gọn hơn)
-                data.results.forEach(item => {
-                    // Lấy màu mood
-                    let mood = item.mood || 'purple';
-                    if(!MOOD_COLORS[mood]) mood = 'purple';
-                    const styles = MOOD_COLORS[mood];
+                // Dùng renderSingleCard
+                data.results.forEach((item, index) => {
+                    // Tham số thứ 3 là 'list' (container nơi thẻ bài sẽ được gắn vào)
+                    renderSingleCard(item, index, list);
+                });
 
-                    const el = document.createElement('div');
-                    // Thêm class 'relative' và 'group' để xử lý hover
-                    el.className = `glass rounded-lg p-5 border-l-4 ${styles.bg.replace('shadow-','')} hover:bg-white/5 transition cursor-pointer`;
-                    
-                    el.innerHTML = `
-                        <div class="flex justify-between items-start mb-2">
-                            <h4 class="font-bold text-gray-200 text-sm">${item.book_title}</h4>
-                            <span class="text-[10px] uppercase tracking-wider ${styles.text} border border-white/10 px-2 py-0.5 rounded">${mood}</span>
-                        </div>
-                        <p class="text-gray-400 text-sm italic line-clamp-3 mb-3">"${item.content}"</p>
-                        <div class="text-xs text-gray-600 font-mono">ID: #${item.id}</div>
-                    `;
-                    // Click vào thì xem chi tiết như bình thường
-                    el.onclick = () => openRead(item); 
-                    list.appendChild(el);
+                // 5. Thêm hiệu ứng xuất hiện (Animation) cho đẹp mắt
+                anime({
+                    targets: '#myThoughtsList .thought-card', // Chỉ target các thẻ trong list này
+                    opacity: [0, 1],
+                    translateY: [20, 0],
+                    delay: anime.stagger(50), // Xuất hiện đuổi nhau nhanh hơn chút
+                    easing: 'easeOutExpo'
                 });
 
             } catch(e) {
-                list.innerHTML = '<div class="text-red-400 text-center col-span-full">Failed to retrieve memories.</div>';
+                console.error(e);
+                list.innerHTML = '<div class="text-red-400 text-center col-span-full">The connection to the void was severed.</div>';
             }
         }
+
         // --- 5. AUTH LOGIC (Minimalist) ---
         function checkAuth() {
             if(localStorage.getItem('token')) {
@@ -489,15 +531,80 @@
             } catch(e) {}
         }
         
-        // Search (Giữ lại logic cũ nhưng đổi UI) - Tạm thời chưa implement UI Search mới, dùng Wander là chính.
+        // XỬ LÝ SEARCH
         function openSearch() {
-             let q = prompt("What are you looking for?"); // Dùng prompt đơn giản cho concept Void
-             if(q) {
-                 // Gọi API Search cũ
-                 // ... Logic tương tự loadThoughts nhưng fetch URL search
-                 // Để đơn giản cho bài hướng dẫn này, ta tập trung vào Wander.
-                 alert("The void is vast. Just wander.");
-             }
+            document.getElementById('searchModal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('searchInput').focus(), 100);
+        }
+
+        function closeSearch() {
+            document.getElementById('searchModal').classList.add('hidden');
+        }
+
+        function handleSearchEnter(e) {
+            if (e.key === 'Enter') doSearch();
+        }
+
+        async function doSearch() {
+            const query = document.getElementById('searchInput').value;
+            if (!query) return;
+
+            closeSearch();
+            
+            // Hiện loading và gọi API tìm kiếm
+            const grid = document.getElementById('cardGrid');
+            const loader = document.getElementById('loading');
+            
+            grid.innerHTML = '';
+            loader.style.display = 'flex';
+            loader.innerText = `Seeking "${query}"...`;
+
+            try {
+                // Gọi API Search (Backend đã có sẵn từ các bước trước)
+                let res = await fetch(`/api/thoughts/search?q=${encodeURIComponent(query)}`);
+                let data = await res.json();
+                
+                loader.style.display = 'none';
+                
+                // Render kết quả (Tái sử dụng logic render cũ)
+                if(data.results.length === 0) {
+                    grid.innerHTML = `<div class="col-span-full text-center text-gray-500 mt-20">No echoes found for "${query}".</div>`;
+                    // Thêm nút quay lại
+                    grid.innerHTML += `<div class="col-span-full text-center mt-4"><button onclick="wander()" class="text-purple-400 hover:text-white underline">Return to stream</button></div>`;
+                    return;
+                }
+
+                // Render Cards 
+                data.results.forEach((item, i) => {
+                    renderSingleCard(item, i, grid); 
+                });
+                
+                // Animation
+                anime({ targets: '.thought-card', opacity: [0, 1], translateY: [20, 0], delay: anime.stagger(100) });
+
+            } catch (e) { loader.innerText = "The void is unreachable."; }
+        }
+
+        // HÀM HELPER: RENDER CARD (Để dùng chung cho cả Load, Search, Profile)
+        function renderSingleCard(item, index, container) {
+            let mood = item.mood || 'purple';
+            if(!MOOD_COLORS[mood]) mood = 'purple';
+            const styles = MOOD_COLORS[mood];
+            
+            const div = document.createElement('div');
+            div.className = `thought-card glass rounded-xl p-6 mb-6 cursor-pointer transform transition duration-500 hover:-translate-y-2 break-inside-avoid opacity-0 border-t ${styles.bg}`;
+            div.onclick = () => openRead(item);
+
+            const snippet = item.content.length > 100 ? item.content.substring(0, 100) + "..." : item.content;
+            
+            div.innerHTML = `
+                <div class="font-serif text-xl italic mb-4 text-gray-100 opacity-90 leading-relaxed">"${snippet}"</div>
+                <div class="flex items-center justify-between border-t border-white/5 pt-4">
+                    <span class="text-xs uppercase tracking-widest font-bold ${styles.text}">${item.book_title}</span>
+                    <span class="text-xs text-gray-500"><i class="fa-solid fa-user"></i> ${item.username}</span>
+                </div>
+            `;
+            container.appendChild(div);
         }
 
     </script>
