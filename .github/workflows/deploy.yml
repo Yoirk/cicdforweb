@@ -56,7 +56,7 @@ jobs:
 
 # 2. Build & Export (Tạo Artifact, KHÔNG Push)
   build-export:
-    name: 2. Build & Export Image
+    name: Build & Export Image
     needs: security-sast
     runs-on: ubuntu-latest
     steps:
@@ -134,7 +134,20 @@ jobs:
         run: docker compose up -d
 
       - name: Wait for App
-        run: sleep 15
+        run: sleep 60 # Chờ app khởi động
+
+      # Kiểm tra trạng thái container trước khi Scan
+      # Nếu container nào bị Exit hoặc Unhealthy, sẽ thấy ngay ở đây
+      - name: Check Container Status & Logs
+        run: |
+          echo "=== CONTAINER STATUS ==="
+          docker compose ps -a
+          
+          echo "=== WEB LOGS ==="
+          docker compose logs web
+          
+          echo "=== BACKEND LOGS ==="
+          docker compose logs backend
 
       - name: ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.14.0
@@ -142,6 +155,8 @@ jobs:
           target: 'http://localhost'
           fail_action: true
           allow_issue_writing: false
+          # ZAP in ra log chi tiết nếu fail
+          cmd_options: '-d'
 
   push-registry:
     name: Push & Sign
@@ -193,6 +208,7 @@ jobs:
           cosign sign --yes ghcr.io/$REPO_LC-backend:latest
 
   deploy:
+    name: Deploy to VPS
     needs: push-registry 
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
