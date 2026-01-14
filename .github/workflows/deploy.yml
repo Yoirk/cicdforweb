@@ -24,7 +24,7 @@ jobs:
 
       # 1. Quét Secret (Sửa security-checks -> scanners)
       - name: Trivy Secret Scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.29.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -34,7 +34,7 @@ jobs:
 
       # 2. Quét lỗ hổng Code & Config 
       - name: Trivy SAST Scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.29.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -119,7 +119,7 @@ jobs:
         run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
 
       - name: Trivy Scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.29.0
         with:
           image-ref: '${{ steps.meta.outputs.image }}:latest'
           format: 'table'
