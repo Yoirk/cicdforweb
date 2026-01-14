@@ -174,7 +174,7 @@ jobs:
             fail_action: true
             allow_issue_writing: false
             cmd_options: '-d'
-            rules_file_name: '.zap/rules.tsv'
+            rules_file_name: 'rules.tsv'
 
   push-registry:
     name: Push & Sign
@@ -302,7 +302,6 @@ jobs:
           target: 'https://wanderingtomes.site' # Target lấy từ cấu hình Nginx
           fail_action: false # Không block pipeline nếu có lỗi
           allow_issue_writing: false # Không tự tạo issue trên Github
-          rules_file_name: '.zap/rules.tsv'
 
       - name: Upload Report
         if: always()

@@ -1,6 +1,0 @@
-# ID    Level   Comment
-10017   IGNORE  (Cross-Domain JS) Chap nhan rui ro vi dung CDN Dev
-90003   IGNORE  (SRI Missing) Khong the dung SRI voi Tailwind Play CDN
-10023   IGNORE  (Debug Info) Chap nhan lo debug info o moi truong Dev
-90022   IGNORE  (App Error) Chap nhan lo error message
-10049   IGNORE  (Cache) Chap nhan cache control hien tai
