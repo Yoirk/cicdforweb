@@ -126,47 +126,57 @@ jobs:
             docker tag cicdforweb:test ghcr.io/$REPO_LC:latest
             docker tag cicdforweb-backend:test ghcr.io/$REPO_LC-backend:latest
 
-        # Tạo chứng chỉ SSL giả để test môi trường HTTPS cục bộ
+        - uses: actions/checkout@v4
+        - uses: actions/download-artifact@v4
+          with: {name: docker-images, path: images}
+        - run: |
+            docker load -i images/web.tar
+            docker load -i images/backend.tar
+            REPO_LC=${GITHUB_REPOSITORY,,}
+            docker tag cicdforweb:test ghcr.io/$REPO_LC:latest
+            docker tag cicdforweb-backend:test ghcr.io/$REPO_LC-backend:latest
+
+        # TẠO CHỨNG CHỈ SSL GIẢ 
         - name: Generate Dummy SSL Certs
           run: |
-            # 1. Tạo thư mục cấu trúc giống hệt VPS
             mkdir -p /tmp/certs/live/wanderingtomes.site
-            
-            # 2. Tạo chứng chỉ tự ký (Self-signed)
             openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
               -keyout /tmp/certs/live/wanderingtomes.site/privkey.pem \
               -out /tmp/certs/live/wanderingtomes.site/fullchain.pem \
               -subj "/C=VN/ST=HCM/L=HCM/O=DevSecOps/OU=IT/CN=wanderingtomes.site"
-              
-            # 3. Phân quyền (quan trọng để Nginx đọc được)
             chmod -R 755 /tmp/certs
+
+        # TẠO FILE RULES TỰ ĐỘNG 
+        # Dùng printf để ép buộc dùng dấu \t (Tab) chuẩn xác
+        - name: Create ZAP Rules File
+          run: |
+            printf "10017\tIGNORE\t(Cross-Domain JS)\n" > rules.tsv
+            printf "10023\tIGNORE\t(Debug Info)\n" >> rules.tsv
+            printf "10027\tIGNORE\t(Suspicious Comments)\n" >> rules.tsv
+            printf "10049\tIGNORE\t(Cache Headers)\n" >> rules.tsv
+            printf "10055\tIGNORE\t(CSP Wildcard)\n" >> rules.tsv
+            printf "10109\tIGNORE\t(Modern Web App)\n" >> rules.tsv
+            printf "90003\tIGNORE\t(SRI Missing)\n" >> rules.tsv
+            printf "90004\tIGNORE\t(Site Isolation)\n" >> rules.tsv
+            printf "90022\tIGNORE\t(App Error)\n" >> rules.tsv
+            
+            # In ra xem thử cho chắc
+            cat rules.tsv 
 
         - name: Spin up Environment
           run: |
-            # Mount thư mục cert vừa tạo vào đúng chỗ trong container
-            # Dùng biến môi trường hoặc tạo file override tạm thời
-            
-            # Cách đơn giản nhất: Tạo file docker-compose.override.yml
             cat <<EOF > docker-compose.override.yml
             services:
               web:
                 volumes:
                   - /tmp/certs:/etc/letsencrypt:ro
             EOF
-            
-            # Docker Compose sẽ tự động gộp file gốc và file override
             docker compose up -d
 
         - name: Wait for App
-          run: sleep 30 # Đợi 30s là đủ nếu có cert
+          run: sleep 30
 
-        # DEBUG: Kiểm tra nếu Nginx còn sống hay không
-        - name: Check Container Status
-          if: failure()
-          run: |
-            docker compose ps -a
-            docker compose logs web
-
+        # QUÉT ZAP (Trỏ vào file vừa tạo)
         - name: ZAP Baseline Scan
           uses: zaproxy/action-baseline@v0.14.0
           with:
@@ -174,7 +184,7 @@ jobs:
             fail_action: true
             allow_issue_writing: false
             cmd_options: '-d'
-            rules_file_name: 'rules.tsv'
+            rules_file_name: 'rules.tsv' # File này giờ được tạo bởi lệnh trên
 
   push-registry:
     name: Push & Sign

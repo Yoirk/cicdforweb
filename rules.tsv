@@ -1,7 +1,0 @@
-10017   IGNORE	(Cross-Domain JS) Chap nhan rui ro vi dung CDN Dev
-90003   IGNORE	(SRI Missing) Khong the dung SRI voi Tailwind Play CDN
-10023   IGNORE	(Debug Info) Chap nhan lo debug info o moi truong Dev
-90022   IGNORE	(App Error) Chap nhan lo error message
-10049   IGNORE	(Cache) Chap nhan cache control hien tai
-10055   IGNORE	(CSP Wildcard) Chap nhan https wildcard cho CDN
-10109   IGNORE  (Modern Web) Alert thong tin khong can thiet
