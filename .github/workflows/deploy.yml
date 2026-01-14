@@ -22,7 +22,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 1. Quét Secret (Sửa security-checks -> scanners)
+      # 1. Quét Secret
       - name: Trivy Secret Scan
         uses: aquasecurity/trivy-action@0.29.0
         with:
@@ -54,35 +54,109 @@ jobs:
           # ./backend: Đường dẫn thư mục code của bạn
           bandit -r ./backend -lll
 
-  build-and-push:
+# 2. Build & Export (Tạo Artifact, KHÔNG Push)
+  build-export:
+    name: 2. Build & Export Image
     needs: security-sast
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - service: web
-            context: .
-            dockerfile: Dockerfile
-          - service: backend
-            context: ./backend
-            dockerfile: backend/Dockerfile
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # Chuyển tên Repo thành chữ thường
-      - name: Lowercase Repository Name
+      - uses: actions/checkout@v4
+      
+      # Build Docker Image (Tag tạm là :test)
+      - name: Build Images
         run: |
-          echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+          docker build -t cicdforweb:test .
+          docker build -t cicdforweb-backend:test ./backend
 
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@v3.3.0
+      # Quét ngay lập tức sau khi build. Nếu lỗi -> Dừng pipeline luôn.
+      - name: Trivy Scan Image (Web)
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          image-ref: 'cicdforweb:test'
+          format: 'table'
+          exit-code: '1' # Lỗi là thoát ngay
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
 
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Trivy Scan Image (Backend)
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          image-ref: 'cicdforweb-backend:test'
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
 
+      # Xuất Image ra file .tar để truyền sang job khác
+      - name: Save Images to Tar
+        run: |
+          mkdir -p images
+          docker save -o images/web.tar cicdforweb:test
+          docker save -o images/backend.tar cicdforweb-backend:test
+
+      # Upload file .tar lên GitHub Artifacts
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-images
+          path: images/
+          retention-days: 1
+
+  dast-ci:
+    name: DAST CI (Localhost)
+    needs: build-export  
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Tải file .tar về
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-images
+          path: images
+
+      # Nạp image vào Docker
+      - name: Load Docker Images
+        run: |
+          docker load -i images/web.tar
+          docker load -i images/backend.tar
+
+      # Đổi tên tag từ :test sang :latest để docker-compose.yml hiểu
+      - name: Retag for Docker Compose
+        run: |
+          REPO_LC=${GITHUB_REPOSITORY,,}
+          docker tag cicdforweb:test ghcr.io/$REPO_LC:latest
+          docker tag cicdforweb-backend:test ghcr.io/$REPO_LC-backend:latest
+
+      # Dựng môi trường và Scan bằng ZAP
+      - name: Spin up Environment
+        run: docker compose up -d
+
+      - name: Wait for App
+        run: sleep 15
+
+      - name: ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: 'http://localhost'
+          fail_action: true
+          allow_issue_writing: false
+
+  push-registry:
+    name: Push & Sign
+    needs: dast-ci
+    runs-on: ubuntu-latest
+    steps:
+      # Tải lại Artifact và Load giống hệt job trên
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {name: docker-images, path: images}
+      - run: |
+          docker load -i images/web.tar
+          docker load -i images/backend.tar
+
+      # Đăng nhập GHCR 
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
@@ -90,46 +164,36 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Sử dụng biến REPO_LC (đã viết thường) thay vì github.repository
-      - name: Set Image Tag
-        id: meta
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.3.0
+
+      # Tag chuẩn và Push
+      - name: Tag and Push
         run: |
-          if [ "${{ matrix.service }}" == "web" ]; then
-            echo "image=ghcr.io/${{ env.REPO_LC }}" >> $GITHUB_OUTPUT
-          else
-            echo "image=ghcr.io/${{ env.REPO_LC }}-backend" >> $GITHUB_OUTPUT
-          fi
+          REPO_LC=${GITHUB_REPOSITORY,,}
+          
+          # Push Web
+          docker tag cicdforweb:test ghcr.io/$REPO_LC:latest
+          docker tag cicdforweb:test ghcr.io/$REPO_LC:${{ github.sha }}
+          docker push ghcr.io/$REPO_LC:latest
+          docker push ghcr.io/$REPO_LC:${{ github.sha }}
+          
+          # Push Backend
+          docker tag cicdforweb-backend:test ghcr.io/$REPO_LC-backend:latest
+          docker tag cicdforweb-backend:test ghcr.io/$REPO_LC-backend:${{ github.sha }}
+          docker push ghcr.io/$REPO_LC-backend:latest
+          docker push ghcr.io/$REPO_LC-backend:${{ github.sha }}
 
-      - name: Build and Push
-        id: build-and-push
-        uses: docker/build-push-action@v5
-        with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.image }}:latest,${{ steps.meta.outputs.image }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Sign Image
-        if: ${{ github.event_name != 'pull_request' }}
-        env:
-          TAGS: ${{ steps.meta.outputs.image }}:latest
-          DIGEST: ${{ steps.build-and-push.outputs.digest }}
-        run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
-
-      - name: Trivy Scan
-        uses: aquasecurity/trivy-action@0.29.0
-        with:
-          image-ref: '${{ steps.meta.outputs.image }}:latest'
-          format: 'table'
-          exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
+      # Ký Image 
+      - name: Sign Images
+        run: |
+          REPO_LC=${GITHUB_REPOSITORY,,}
+          # ... (Copy lệnh cosign sign từ file cũ của bạn vào đây) ...
+          cosign sign --yes ghcr.io/$REPO_LC:latest
+          cosign sign --yes ghcr.io/$REPO_LC-backend:latest
 
   deploy:
-    needs: build-and-push
+    needs: push-registry 
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
