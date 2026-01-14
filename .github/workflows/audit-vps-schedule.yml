@@ -18,30 +18,32 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            # 1. Cài đặt Lynis nếu chưa có (Ubuntu/Debian)
             if ! command -v lynis &> /dev/null; then
                 echo "Installing Lynis..."
                 sudo apt-get update -q && sudo apt-get install lynis -y -q
             fi
 
-            # 2. Chạy quét (System Audit)
-            # --quick: Chạy không cần confirm
             echo "Running Lynis Audit..."
+            # Lưu kết quả vào file log
             sudo lynis audit system --quick > /tmp/lynis-report.log
 
-            # 3. Hiển thị kết quả tóm tắt ra log của Github
-            echo "------------------------------------------------"
-            echo "SECURITY SCORE:"
+            echo "================================================"
+            echo "HARDENING INDEX REPORT"
+            echo "================================================"
             grep "Hardening index" /tmp/lynis-report.log
-            echo "------------------------------------------------"
-            
-            echo "TOP 10 SUGGESTIONS:"
-            grep "Suggestion" /tmp/lynis-report.log | head -n 10
-            echo "------------------------------------------------"
+            echo ""
 
-            # 4. Kiểm tra cảnh báo nghiêm trọng
-            WARNINGS=$(grep -c "Warning" /tmp/lynis-report.log)
-            echo "Found $WARNINGS warnings."
+            echo "================================================"
+            echo "CRITICAL WARNINGS (Can Fix Ngay)"
+            echo "================================================"
+            # Lệnh này sẽ in ra dòng chứa chữ Warning kèm mô tả
+            grep "Warning" /tmp/lynis-report.log || echo "No Warnings found."
+            echo ""
+
+            echo "================================================"
+            echo "TOP 10 SUGGESTIONS (Lam Tu Tu)"
+            echo "================================================"
+            grep "Suggestion" /tmp/lynis-report.log | head -n 10
             
-            # Xóa file log sau khi xong
+            # Dọn dẹp
             rm /tmp/lynis-report.log
