@@ -332,6 +332,22 @@
             }
         }
 
+        function closeRead() {
+            const modal = document.getElementById('readModal');
+            // Hiệu ứng mờ dần
+            modal.classList.add('opacity-0');
+            // Đợi 0.5s cho mờ hẳn rồi mới ẩn đi (phải khớp với duration-500 trong CSS)
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                // Reset lại trạng thái nút (nếu cần)
+                const btn = document.getElementById('btnResonate');
+                if(btn) {
+                    btn.classList.remove('bg-purple-500', 'text-white');
+                    document.getElementById('resonateTxt').innerText = "Resonate";
+                }
+            }, 500);
+        }
+        
         // --- 3. WRITING MODE (ZEN) ---
         function openWrite() {
             if(!localStorage.getItem('token')) {
