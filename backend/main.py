@@ -91,6 +91,23 @@ def get_random_thoughts():
         rows = conn.execute(sql).fetchall()
     return {"results": [dict(r) for r in rows]}
 
+@app.get("/thoughts/mine")
+def get_my_thoughts(token: str):
+    # Lấy username từ token
+    username = get_current_user(token)
+    
+    # Query lấy bài viết của user đó
+    sql = """
+        SELECT t.id, t.content, t.book_title, t.mood, u.username 
+        FROM thoughts t 
+        JOIN users u ON t.user_id = u.id 
+        WHERE u.username = ? 
+        ORDER BY t.id DESC
+    """
+    with get_db() as conn:
+        rows = conn.execute(sql, (username,)).fetchall()
+    return {"results": [dict(r) for r in rows]}
+
 @app.get("/thoughts/search")
 def search(q: str = ""):
     sql = "SELECT t.content, t.book_title, t.mood, u.username FROM thoughts t JOIN users u ON t.user_id = u.id WHERE t.book_title LIKE ? OR t.content LIKE ? ORDER BY t.id DESC LIMIT 20"

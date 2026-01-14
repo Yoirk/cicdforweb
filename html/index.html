@@ -170,6 +170,29 @@
         </div>
     </div>
 
+    <div id="profileModal" class="fixed inset-0 z-50 bg-[#0f0c29]/95 hidden flex flex-col transition-all duration-500">
+        <div class="p-6 border-b border-white/10 flex justify-between items-center bg-[#0f0c29]">
+            <h2 class="font-serif text-2xl text-transparent bg-clip-text bg-gradient-to-r from-purple-200 to-pink-200">
+                My Echoes
+            </h2>
+            <button onclick="closeProfile()" class="text-gray-500 hover:text-white text-2xl"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <div class="flex-grow overflow-y-auto p-4 md:p-8 custom-scroll">
+            <div id="myThoughtsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-6xl mx-auto">
+                </div>
+            <div id="myEmptyMsg" class="hidden text-center text-gray-500 mt-20 font-serif italic">
+                You haven't whispered into the void yet.
+            </div>
+        </div>
+
+        <div class="p-6 border-t border-white/10 flex justify-center bg-[#0f0c29]">
+            <button onclick="doLogout()" class="text-red-400 hover:text-red-300 text-sm tracking-widest uppercase border border-red-500/30 px-6 py-2 rounded hover:bg-red-500/10 transition">
+                Disconnect Soul (Logout)
+            </button>
+        </div>
+    </div>
+
     <script>
         // --- CONFIG & STATE ---
         const MOOD_COLORS = {
@@ -334,28 +357,97 @@
                 
                 if(res.ok) {
                     closeWrite();
-                    // Reset form
                     document.getElementById('inputTitle').value = '';
                     document.getElementById('inputContent').value = '';
-                    // Wander đến suy nghĩ mới
                     setTimeout(wander, 500);
                 } else {
-                    document.getElementById('writeMsg').innerText = "Session expired. Please login again.";
-                    localStorage.removeItem('token');
+                    if (res.status === 401) {
+                        document.getElementById('writeMsg').innerText = "Session expired. Please login again.";
+                        localStorage.removeItem('token');
+                    } else {
+                        // Hiện lỗi thật sự từ server (ví dụ: 500 Internal Server Error)
+                        document.getElementById('writeMsg').innerText = `Error (${res.status}): Something went wrong inside the void.`;
+                    }
                 }
             } catch(e) {
                 document.getElementById('writeMsg').innerText = "Error sending thought.";
             }
         }
 
-        // --- 4. AUTH LOGIC (Minimalist) ---
-        function checkAuth() {
-            if(localStorage.getItem('token')) {
-                // Đã login -> Hỏi logout?
-                if(confirm(`Log out from ${localStorage.getItem('user')}?`)) {
+        // --- 4. PROFILE & MY THOUGHTS ---
+        function openProfile() {
+            document.getElementById('profileModal').classList.remove('hidden');
+            loadMyThoughts();
+        }
+
+        function closeProfile() {
+            document.getElementById('profileModal').classList.add('hidden');
+        }
+
+        function doLogout() {
+            if(confirm("Are you sure you want to leave the void?")) {
+                localStorage.clear();
+                location.reload();
+            }
+        }
+
+        async function loadMyThoughts() {
+            const list = document.getElementById('myThoughtsList');
+            const emptyMsg = document.getElementById('myEmptyMsg');
+            
+            list.innerHTML = '<div class="col-span-full text-center text-purple-300 animate-pulse">Recalling memories...</div>';
+            emptyMsg.classList.add('hidden');
+
+            try {
+                // Gọi API mới
+                let res = await fetch(`/api/thoughts/mine?token=${localStorage.getItem('token')}`);
+                
+                if(!res.ok) { // Nếu token lỗi -> Logout luôn
                     localStorage.clear();
                     location.reload();
+                    return;
                 }
+
+                let data = await res.json();
+                list.innerHTML = ''; // Xóa loading
+
+                if(data.results.length === 0) {
+                    emptyMsg.classList.remove('hidden');
+                    return;
+                }
+
+                // Render từng thẻ bài (giống trang chủ nhưng nhỏ gọn hơn)
+                data.results.forEach(item => {
+                    // Lấy màu mood
+                    let mood = item.mood || 'purple';
+                    if(!MOOD_COLORS[mood]) mood = 'purple';
+                    const styles = MOOD_COLORS[mood];
+
+                    const el = document.createElement('div');
+                    // Thêm class 'relative' và 'group' để xử lý hover
+                    el.className = `glass rounded-lg p-5 border-l-4 ${styles.bg.replace('shadow-','')} hover:bg-white/5 transition cursor-pointer`;
+                    
+                    el.innerHTML = `
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="font-bold text-gray-200 text-sm">${item.book_title}</h4>
+                            <span class="text-[10px] uppercase tracking-wider ${styles.text} border border-white/10 px-2 py-0.5 rounded">${mood}</span>
+                        </div>
+                        <p class="text-gray-400 text-sm italic line-clamp-3 mb-3">"${item.content}"</p>
+                        <div class="text-xs text-gray-600 font-mono">ID: #${item.id}</div>
+                    `;
+                    // Click vào thì xem chi tiết như bình thường
+                    el.onclick = () => openRead(item); 
+                    list.appendChild(el);
+                });
+
+            } catch(e) {
+                list.innerHTML = '<div class="text-red-400 text-center col-span-full">Failed to retrieve memories.</div>';
+            }
+        }
+        // --- 5. AUTH LOGIC (Minimalist) ---
+        function checkAuth() {
+            if(localStorage.getItem('token')) {
+                openProfile(); // Thay đổi ở đây
             } else {
                 document.getElementById('authModal').classList.remove('hidden');
             }
