@@ -24,8 +24,8 @@ jobs:
             fi
 
             echo "Running Lynis Audit..."
-            # Lưu kết quả vào file log
-            sudo lynis audit system --quick > /tmp/lynis-report.log
+            # --no-colors để log sạch sẽ dễ đọc hơn
+            sudo lynis audit system --quick --no-colors > /tmp/lynis-report.log
 
             echo "================================================"
             echo "HARDENING INDEX REPORT"
@@ -34,16 +34,21 @@ jobs:
             echo ""
 
             echo "================================================"
-            echo "CRITICAL WARNINGS (Can Fix Ngay)"
+            echo "CRITICAL WARNINGS (CHI TIET)"
             echo "================================================"
-            # Lệnh này sẽ in ra dòng chứa chữ Warning kèm mô tả
-            grep "Warning" /tmp/lynis-report.log || echo "No Warnings found."
+            # Cách 1: Tìm dòng test cụ thể bị đánh dấu [ WARNING ]
+            grep "\[ WARNING \]" /tmp/lynis-report.log || echo "No inline warnings found."
+            
+            echo "------------------------------------------------"
+            echo "WARNING SUMMARY:"
+            # Cách 2: In dòng 'Warnings (' và 5 dòng tiếp theo (-A 5) để thấy nội dung
+            grep -A 5 "Warnings (" /tmp/lynis-report.log
             echo ""
 
             echo "================================================"
-            echo "TOP 10 SUGGESTIONS (Lam Tu Tu)"
+            echo "TOP 10 SUGGESTIONS"
             echo "================================================"
-            grep "Suggestion" /tmp/lynis-report.log | head -n 10
+            # Lấy dòng Suggestion và cắt gọn để dễ đọc
+            grep "Suggestion:" /tmp/lynis-report.log | head -n 10
             
-            # Dọn dẹp
             rm /tmp/lynis-report.log
