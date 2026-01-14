@@ -23,7 +23,17 @@ os.makedirs("/data", exist_ok=True)
 with get_db() as conn:
     conn.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password_hash TEXT)')
     conn.execute('CREATE TABLE IF NOT EXISTS thoughts (id INTEGER PRIMARY KEY, content TEXT, book_title TEXT, mood TEXT, user_id INTEGER)')
-
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS resonances (
+            user_id INTEGER, 
+            thought_id INTEGER, 
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, thought_id),
+            FOREIGN KEY(user_id) REFERENCES users(id),
+            FOREIGN KEY(thought_id) REFERENCES thoughts(id)
+        )
+    ''')
+    
 # Models
 class UserAuth(BaseModel):
     username: str
@@ -93,20 +103,37 @@ def get_random_thoughts():
 
 @app.get("/thoughts/mine")
 def get_my_thoughts(token: str):
-    # Lấy username từ token
     username = get_current_user(token)
     
-    # Query lấy bài viết của user đó
-    sql = """
-        SELECT t.id, t.content, t.book_title, t.mood, u.username 
-        FROM thoughts t 
-        JOIN users u ON t.user_id = u.id 
-        WHERE u.username = ? 
-        ORDER BY t.id DESC
-    """
     with get_db() as conn:
-        rows = conn.execute(sql, (username,)).fetchall()
-    return {"results": [dict(r) for r in rows]}
+        user = conn.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
+        uid = user['id']
+
+        # 1. Bài do mình viết (Created)
+        sql_created = """
+            SELECT t.id, t.content, t.book_title, t.mood, u.username 
+            FROM thoughts t 
+            JOIN users u ON t.user_id = u.id 
+            WHERE u.id = ? 
+            ORDER BY t.id DESC
+        """
+        created = conn.execute(sql_created, (uid,)).fetchall()
+
+        # 2. Bài mình đã lưu (Saved)
+        sql_saved = """
+            SELECT t.id, t.content, t.book_title, t.mood, u.username 
+            FROM thoughts t 
+            JOIN resonances r ON t.id = r.thought_id
+            JOIN users u ON t.user_id = u.id 
+            WHERE r.user_id = ? 
+            ORDER BY r.timestamp DESC
+        """
+        saved = conn.execute(sql_saved, (uid,)).fetchall()
+
+    return {
+        "created": [dict(r) for r in created],
+        "saved": [dict(r) for r in saved]
+    }
 
 @app.get("/thoughts/search")
 def search(q: str = ""):
@@ -115,3 +142,28 @@ def search(q: str = ""):
     with get_db() as conn:
         rows = conn.execute(sql, (val, val)).fetchall()
     return {"results": [dict(r) for r in rows]}
+
+@app.post("/thoughts/{thought_id}/resonate")
+def toggle_resonance(thought_id: int, token: str):
+    username = get_current_user(token)
+    try:
+        with get_db() as conn:
+            # Lấy user_id
+            user = conn.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
+            uid = user['id']
+            
+            # Kiểm tra xem đã lưu chưa
+            exist = conn.execute("SELECT 1 FROM resonances WHERE user_id=? AND thought_id=?", (uid, thought_id)).fetchone()
+            
+            if exist:
+                # Nếu có rồi thì xóa (Unsave)
+                conn.execute("DELETE FROM resonances WHERE user_id=? AND thought_id=?", (uid, thought_id))
+                msg = "Unsaved"
+            else:
+                # Chưa có thì thêm (Save)
+                conn.execute("INSERT INTO resonances (user_id, thought_id) VALUES (?, ?)", (uid, thought_id))
+                msg = "Saved"
+            conn.commit()
+        return {"status": msg}
+    except Exception as e:
+        raise HTTPException(400, "Error processing resonance")
