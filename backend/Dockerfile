@@ -26,11 +26,11 @@ RUN mkdir /data && \
     adduser -D -u 1001 pythonuser && \
     chown -R 1001:1001 /app /data
 
-    RUN pip install pipdeptree && \
+RUN pip install pipdeptree && \
     echo "=== CHECK VERSION ===" && \
     pip show jaraco.context || true && \
     echo "=== CHECK DEPENDENCY ===" && \
     pipdeptree --reverse --packages jaraco.context || true
-    
+
 USER 1001
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
