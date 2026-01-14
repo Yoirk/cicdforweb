@@ -167,3 +167,39 @@ def toggle_resonance(thought_id: int, token: str):
         return {"status": msg}
     except Exception as e:
         raise HTTPException(400, "Error processing resonance")
+    
+# API Kiểm tra trạng thái Resonate của 1 bài viết
+@app.get("/thoughts/{thought_id}/resonated")
+def is_resonated(thought_id: int, token: str):
+    try:
+        user = get_current_user(token)
+        with get_db() as conn:
+            # Lấy ID người dùng hiện tại
+            u_row = conn.execute("SELECT id FROM users WHERE username=?", (user,)).fetchone()
+            if not u_row: return {"resonated": False}
+            
+            # Kiểm tra trong bảng resonances
+            exist = conn.execute("SELECT 1 FROM resonances WHERE user_id=? AND thought_id=?", (u_row['id'], thought_id)).fetchone()
+            return {"resonated": True if exist else False}
+    except:
+        return {"resonated": False}
+
+# API Xóa bài viết (Chỉ chủ sở hữu mới được xóa)
+@app.delete("/thoughts/{thought_id}")
+def delete_thought(thought_id: int, token: str):
+    user = get_current_user(token)
+    with get_db() as conn:
+        u_row = conn.execute("SELECT id FROM users WHERE username=?", (user,)).fetchone()
+        if not u_row: raise HTTPException(401, "Invalid user")
+        
+        # Kiểm tra xem bài viết có phải của user này không
+        t_row = conn.execute("SELECT user_id FROM thoughts WHERE id=?", (thought_id,)).fetchone()
+        if not t_row: raise HTTPException(404, "Not found")
+        if t_row['user_id'] != u_row['id']: raise HTTPException(403, "Not owner")
+
+        # Xóa các Resonances liên quan trước (để sạch dữ liệu)
+        conn.execute("DELETE FROM resonances WHERE thought_id=?", (thought_id,))
+        # Xóa bài viết
+        conn.execute("DELETE FROM thoughts WHERE id=?", (thought_id,))
+        conn.commit()
+    return {"msg": "Deleted"}

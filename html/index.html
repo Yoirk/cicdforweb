@@ -264,7 +264,7 @@
             loader.style.display = 'flex';
 
             try {
-                // Fetch Data
+                // Fetch Data Random
                 let res = await fetch('/api/thoughts/random');
                 let data = await res.json();
                 
@@ -275,32 +275,12 @@
                     return;
                 }
 
-                // Render Cards
+                // Render Cards (Mặc định allowDelete = false)
                 data.results.forEach((item, i) => {
-                    // Fallback mood nếu DB cũ chưa có
-                    let mood = item.mood || Object.keys(MOOD_COLORS)[i % 5]; 
-                    if(!MOOD_COLORS[mood]) mood = 'purple';
-
-                    const styles = MOOD_COLORS[mood];
-                    
-                    const div = document.createElement('div');
-                    div.className = `thought-card glass rounded-xl p-6 mb-6 cursor-pointer transform transition duration-500 hover:-translate-y-2 break-inside-avoid opacity-0 border-t ${styles.bg}`;
-                    div.onclick = () => openRead(item);
-
-                    // Nội dung thẻ: Quote ngắn + Tên sách
-                    const snippet = item.content.length > 100 ? item.content.substring(0, 100) + "..." : item.content;
-                    
-                    div.innerHTML = `
-                        <div class="font-serif text-xl italic mb-4 text-gray-100 opacity-90 leading-relaxed">"${snippet}"</div>
-                        <div class="flex items-center justify-between border-t border-white/5 pt-4">
-                            <span class="text-xs uppercase tracking-widest font-bold ${styles.text}">${item.book_title}</span>
-                            <span class="text-xs text-gray-500"><i class="fa-solid fa-user"></i> ${item.username}</span>
-                        </div>
-                    `;
-                    grid.appendChild(div);
+                    renderSingleCard(item, i, grid);
                 });
 
-                // Animation Fade In (Stagger)
+                // Animation Fade In
                 anime({
                     targets: '.thought-card',
                     opacity: [0, 1],
@@ -322,26 +302,34 @@
         }
 
         // --- 2. READING MODE ---
-        function openRead(item) {
-            currentThoughtId = item.id; // Lưu lại ID
+        async function openRead(item) {
+            currentThoughtId = item.id;
             const modal = document.getElementById('readModal');
             
             document.getElementById('readTitle').innerText = item.book_title;
             document.getElementById('readContent').innerText = item.content;
             document.getElementById('readAuthor').innerText = `Memory by ${item.username}`;
             
-            // Reset trạng thái nút Save (Mặc định là chưa save để đơn giản hóa)
-            document.getElementById('resonateTxt').innerText = "Resonate";
-            document.getElementById('btnResonate').classList.remove('bg-purple-500', 'text-white');
+            // Mặc định reset về trạng thái chưa Save
+            const btn = document.getElementById('btnResonate');
+            const txt = document.getElementById('resonateTxt');
+            txt.innerText = "Resonate";
+            btn.classList.remove('bg-purple-500', 'text-white');
             
             modal.classList.remove('hidden');
             setTimeout(() => modal.classList.remove('opacity-0'), 10);
-        }
 
-        function closeRead() {
-            const modal = document.getElementById('readModal');
-            modal.classList.add('opacity-0');
-            setTimeout(() => modal.classList.add('hidden'), 500);
+            // [MỚI] Gọi API kiểm tra xem đã Resonate chưa
+            if(localStorage.getItem('token')) {
+                try {
+                    let res = await fetch(`/api/thoughts/${item.id}/resonated?token=${localStorage.getItem('token')}`);
+                    let data = await res.json();
+                    if(data.resonated) {
+                        txt.innerText = "Resonated";
+                        btn.classList.add('bg-purple-500', 'text-white');
+                    }
+                } catch(e) {}
+            }
         }
 
         // --- 3. WRITING MODE (ZEN) ---
@@ -473,40 +461,47 @@
         }
 
         async function loadMyThoughts() {
-            // 2 Container riêng biệt
+            // Container cho 2 phần riêng biệt
             const listCreated = document.getElementById('listCreated');
             const listSaved = document.getElementById('listSaved');
             const emptyMsg = document.getElementById('myEmptyMsg');
             
+            // Reset giao diện
             listCreated.innerHTML = ''; 
             listSaved.innerHTML = '';
             emptyMsg.classList.add('hidden');
 
             try {
+                // Gọi API lấy dữ liệu
                 let res = await fetch(`/api/thoughts/mine?token=${localStorage.getItem('token')}`);
                 
+                // Xử lý lỗi token
                 if(!res.ok) {
-                    if(res.status === 401) { localStorage.clear(); location.reload(); }
+                    if(res.status === 401) {
+                        localStorage.clear();
+                        location.reload();
+                    }
                     return;
                 }
 
-                let data = await res.json(); // Data giờ có dạng { created: [], saved: [] }
+                let data = await res.json(); 
+                // Data trả về có dạng: { created: [...], saved: [...] }
 
-                // Render Created
-                if(data.created.length > 0) {
-                    data.created.forEach((item, i) => renderSingleCard(item, i, listCreated));
+                // 1. Render bài viết của tôi (Truyền true để hiện nút Xóa)
+                if(data.created && data.created.length > 0) {
+                    data.created.forEach((item, i) => renderSingleCard(item, i, listCreated, true));
                 } else {
-                    listCreated.innerHTML = '<div class="col-span-full text-gray-600 italic text-sm">No echoes created yet.</div>';
+                    listCreated.innerHTML = '<div class="col-span-full text-gray-500 italic text-sm text-center">You haven\'t written any echoes yet.</div>';
                 }
 
-                // Render Saved
-                if(data.saved.length > 0) {
-                    data.saved.forEach((item, i) => renderSingleCard(item, i, listSaved));
+                // 2. Render bài viết đã lưu (Truyền false hoặc không truyền để ẩn nút Xóa)
+                if(data.saved && data.saved.length > 0) {
+                    data.saved.forEach((item, i) => renderSingleCard(item, i, listSaved, false));
                 } else {
-                    listSaved.innerHTML = '<div class="col-span-full text-gray-600 italic text-sm">No resonances found.</div>';
+                    listSaved.innerHTML = '<div class="col-span-full text-gray-500 italic text-sm text-center">You haven\'t resonated with any echoes yet.</div>';
                 }
 
-                // Animation chung cho cả 2 list
+                // 3. Hiệu ứng xuất hiện
                 anime({
                     targets: '.thought-card',
                     opacity: [0, 1],
@@ -516,7 +511,8 @@
                 });
 
             } catch(e) {
-                console.error(e);
+                console.error("Error loading profile:", e);
+                listCreated.innerHTML = '<div class="text-red-400 text-center col-span-full">Connection to the void lost.</div>';
             }
         }
 
@@ -620,17 +616,25 @@
         }
 
         // HÀM HELPER: RENDER CARD (Để dùng chung cho cả Load, Search, Profile)
-        function renderSingleCard(item, index, container) {
+        // Hàm render thẻ bài viết (Dùng chung cho cả trang chủ và profile)
+        function renderSingleCard(item, index, container, allowDelete = false) {
+            // Fallback nếu không có mood
             let mood = item.mood || 'purple';
             if(!MOOD_COLORS[mood]) mood = 'purple';
             const styles = MOOD_COLORS[mood];
             
+            // Tạo thẻ div cha
             const div = document.createElement('div');
-            div.className = `thought-card glass rounded-xl p-6 mb-6 cursor-pointer transform transition duration-500 hover:-translate-y-2 break-inside-avoid opacity-0 border-t ${styles.bg}`;
+            // Thêm 'relative group' để xử lý vị trí nút xóa
+            div.className = `thought-card glass rounded-xl p-6 mb-6 cursor-pointer transform transition duration-500 hover:-translate-y-2 break-inside-avoid opacity-0 border-t ${styles.bg} relative group`;
+            
+            // Sự kiện click vào thẻ để đọc
             div.onclick = () => openRead(item);
 
+            // Cắt ngắn nội dung nếu quá dài
             const snippet = item.content.length > 100 ? item.content.substring(0, 100) + "..." : item.content;
             
+            // Nội dung thẻ HTML
             div.innerHTML = `
                 <div class="font-serif text-xl italic mb-4 text-gray-100 opacity-90 leading-relaxed">"${snippet}"</div>
                 <div class="flex items-center justify-between border-t border-white/5 pt-4">
@@ -638,7 +642,43 @@
                     <span class="text-xs text-gray-500"><i class="fa-solid fa-user"></i> ${item.username}</span>
                 </div>
             `;
+
+            // [LOGIC MỚI] Thêm nút xóa nếu được phép (allowDelete = true)
+            if(allowDelete) {
+                const delBtn = document.createElement('button');
+                // Style: Nằm góc trên phải, chỉ hiện khi hover chuột vào thẻ
+                delBtn.className = "absolute top-2 right-2 text-red-400 hover:text-red-200 transition opacity-0 group-hover:opacity-100 p-2 z-10";
+                delBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+                delBtn.title = "Delete this memory";
+                
+                // Sự kiện click nút xóa
+                delBtn.onclick = (e) => {
+                    e.stopPropagation(); // Ngăn không cho sự kiện click lan ra thẻ cha (không mở modal đọc)
+                    if(confirm("Are you sure you want to burn this memory forever?")) {
+                        deleteThought(item.id);
+                    }
+                };
+                div.appendChild(delBtn);
+            }
+
             container.appendChild(div);
+        }
+
+        async function deleteThought(id) {
+            try {
+                let res = await fetch(`/api/thoughts/${id}?token=${localStorage.getItem('token')}`, {
+                    method: 'DELETE'
+                });
+                if(res.ok) {
+                    // Xóa thành công thì load lại danh sách
+                    loadMyThoughts();
+                } else {
+                    alert("Cannot delete this thought.");
+                }
+            } catch(e) {
+                console.error(e);
+                alert("Error connecting to the void.");
+            }
         }
 
     </script>
