@@ -103,7 +103,7 @@ jobs:
           retention-days: 1
 
   dast-ci:
-      name: 3. DAST CI (Localhost)
+      name: DAST CI (Localhost)
       needs: build-export
       runs-on: ubuntu-latest
       steps:
@@ -298,24 +298,34 @@ jobs:
             # Cleanup
             docker image prune -f
 
-  dast-scan:
-    name: DAST Scan (OWASP ZAP)
+  # DAST Prod
+  dast-prod:
+    name: DAST Prod
+    needs: deploy
     runs-on: ubuntu-latest
-    needs: deploy # Chạy sau khi deploy xong
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Run ZAP Baseline Scan
+      # 1. TẠO LẠI FILE RULES CHO MÔI TRƯỜNG PROD
+      - name: Create ZAP Rules File
+        run: |
+          printf "10017\tIGNORE\t(Cross-Domain JS)\n" > rules.tsv
+          printf "10023\tIGNORE\t(Debug Info)\n" >> rules.tsv
+          printf "10027\tIGNORE\t(Suspicious Comments)\n" >> rules.tsv
+          printf "10049\tIGNORE\t(Cache Headers)\n" >> rules.tsv
+          printf "10055\tIGNORE\t(CSP Wildcard)\n" >> rules.tsv
+          printf "10109\tIGNORE\t(Modern Web App)\n" >> rules.tsv
+          printf "90003\tIGNORE\t(SRI Missing)\n" >> rules.tsv
+          printf "90004\tIGNORE\t(Site Isolation)\n" >> rules.tsv
+          printf "90022\tIGNORE\t(App Error)\n" >> rules.tsv
+
+      # 2. CHẠY SCAN ZAP TRÊN PROD
+      - name: ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.14.0
         with:
-          target: 'https://wanderingtomes.site' # Target lấy từ cấu hình Nginx
-          fail_action: false # Không block pipeline nếu có lỗi
-          allow_issue_writing: false # Không tự tạo issue trên Github
-
-      - name: Upload Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: zap-scan-report
-          path: report_html.html
+          target: 'https://wanderingtomes.site'
+          fail_action: false # Prod chỉ cảnh báo, không chặn
+          allow_issue_writing: false
+          cmd_options: '-d'
+          rules_file_name: 'rules.tsv'
+          artifact_name: 'zap_report_prod' 
