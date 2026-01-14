@@ -1,0 +1,2 @@
+# Bỏ qua lỗi Path Traversal của jaraco.context (Transitive dependency khó fix)
+GHSA-58pv-8j8x-9vj2
