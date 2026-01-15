@@ -1,5 +1,5 @@
 # 1. Chọn Base Image
-FROM nginx@sha256:1eadbb07820339e8bbfed18c771691970baee292ec4ab2558f1453d26153e22d
+FROM nginx:1.26-alpine@sha256:20665f4bb5ebfa2238497d5a570c9eb3a7726b23089d3810c9d949d294861614
 
 # 2. Thông tin người maintain
 LABEL maintainer="yoirk"
