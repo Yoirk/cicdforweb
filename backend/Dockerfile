@@ -12,8 +12,6 @@ RUN git clone --depth 1 --branch v0.3.13 https://github.com/benbjohnson/litestre
 # Tải về các dependency mới nhất để fix CVEs
 RUN go get golang.org/x/crypto@latest \
            golang.org/x/net@latest \
-           golang.org/x/oauth2@latest \
-           google.golang.org/grpc@latest \
            github.com/mattn/go-sqlite3@latest && \
     go mod tidy
 

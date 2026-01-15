@@ -1,2 +1,7 @@
 # Bỏ qua lỗi Path Traversal của jaraco.context (Transitive dependency khó fix)
 GHSA-58pv-8j8x-9vj2
+
+# Bỏ qua lỗi gRPC và oauth2 của Litestream v0.3.13 vì không thể update (gây break code)
+# Các lỗi này nằm trong công cụ bổ trợ, không ảnh hưởng trực tiếp đến logic web
+CVE-2025-22868
+GHSA-m425-mq94-257g
