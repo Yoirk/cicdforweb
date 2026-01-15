@@ -24,13 +24,11 @@ jobs:
         with:
           fetch-depth: 0 # Lấy toàn bộ lịch sử git để TruffleHog quét
 
-      # 1. Quét Secret chuyên sâu (TruffleHog)
+      # 1. Quét lỗ hổng Secret
       - name: TruffleHog Secret Scan
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          base: "${{ github.event.repository.default_branch }}"
-          head: HEAD
           extra_args: --debug --only-verified
 
       # 2. Quét lỗ hổng Code & Config 
