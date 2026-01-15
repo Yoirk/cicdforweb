@@ -1,5 +1,5 @@
 # cicdforweb
-Build CI/CD and apply it for developing website faklsjfksdjfk
+Build CI/CD and apply it for developing website
 
 ## Overview
 
