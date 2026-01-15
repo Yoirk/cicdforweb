@@ -5,6 +5,11 @@ on:
     - cron: '0 0 * * 0' # 00:00 Chủ nhật hàng tuần
   workflow_dispatch:
 
+  pull_request:
+      branches: [ "main" ]
+      paths: 
+        - '.github/workflows/audit-vps-schedule.yml'
+
 permissions:
   contents: read
 

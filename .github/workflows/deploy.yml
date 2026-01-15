@@ -3,8 +3,14 @@ name: DevSecOps Microservices Pipeline
 on:
   push:
     branches: [ "main" ]
+    paths-ignore:
+      - '.github/workflows/audit-vps-schedule.yml'
+      - 'README.md'
   pull_request:
     branches: [ "main" ]
+    paths-ignore:
+      - '.github/workflows/audit-vps-schedule.yml'
+      - 'README.md'
 
 env:
   REGISTRY: ghcr.io
