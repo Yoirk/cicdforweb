@@ -465,9 +465,10 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: REPO_LC
+          # Truyền thêm GITHUB_REPOSITORY chứa tên gốc
+          envs: REPO_LC,GITHUB_REPOSITORY
           script: |
-            # 1. Cài đặt Cosign (nếu chưa có)
+            # 1. Cài đặt Cosign 
             if ! command -v cosign &> /dev/null; then
                 echo "Installing Cosign..."
                 curl -sSL -O https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64
@@ -476,12 +477,13 @@ jobs:
             fi
 
             cd /root/my-app
-            REPO_LC=${REPO_LC}
+            # REPO_LC (chữ thường) dùng cho Docker Image
+            REPO_LC=${REPO_LC} 
             
             echo ">>> PULLING IMAGES..."
             docker compose pull
 
-            # Lấy Digest thực tế trên đĩa
+            # Lấy Digest (Dùng REPO_LC vì tên ảnh trên GHCR là chữ thường)
             WEB_IMG="ghcr.io/${REPO_LC}:latest"
             BACKEND_IMG="ghcr.io/${REPO_LC}-backend:latest"
             WEB_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $WEB_IMG | cut -d'@' -f2)
@@ -491,9 +493,11 @@ jobs:
             echo "Web: $WEB_DIGEST"
             echo "Backend: $BACKEND_DIGEST"
 
-            # Cấu hình OIDC
-            CERT_IDENTITY="https://github.com/${REPO_LC}/.github/workflows/deploy.yml@refs/heads/main"
+            # Cấu hình OIDC dùng GITHUB_REPOSITORY (Để khớp với Yoirk)
+            CERT_IDENTITY="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/deploy.yml@refs/heads/main"
             CERT_ISSUER="https://token.actions.githubusercontent.com"
+
+            echo "Identity Expected: $CERT_IDENTITY"
 
             # --- VERIFY 1: SIGNATURE ---
             echo ">>> [1/3] Verifying Signatures..."
@@ -514,7 +518,6 @@ jobs:
 
             # --- VERIFY 3: SLSA PROVENANCE ---
             echo ">>> [3/3] Verifying SLSA Provenance..."
-            # GitHub Attestations dùng predicate type khác mặc định của cosign, nên ta verify chung
             if ! cosign verify-attestation --certificate-identity "$CERT_IDENTITY" --certificate-oidc-issuer "$CERT_ISSUER" ghcr.io/${REPO_LC}@$WEB_DIGEST > /dev/null 2>&1; then
                echo "Warning: SLSA Provenance not verified (Soft Fail)"
             else
