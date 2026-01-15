@@ -3,18 +3,21 @@ FROM golang:1.25-alpine@sha256:ac09a5f469f307e5da71e766b0bd59c9c49ea460a528cc3e6
 
 WORKDIR /build
 
-# Cài đặt git và build-base (gcc) để biên dịch SQLite C code
+# Cài đặt git và build-base (gcc)
 RUN apk add --no-cache git build-base
 
-# Cài git và clone source code v0.3.13
-RUN apk add --no-cache git && \
-    git clone --depth 1 --branch v0.3.13 https://github.com/benbjohnson/litestream.git .
+# Clone source code v0.3.13
+RUN git clone --depth 1 --branch v0.3.13 https://github.com/benbjohnson/litestream.git .
 
-# Force update các thư viện đang bị lỗi bảo mật (CVE-2024-45337...)
-RUN go get golang.org/x/crypto@latest golang.org/x/net@latest && \
+# Thêm 'github.com/mattn/go-sqlite3@latest' để fix lỗi osPwrite64 trên Alpine mới
+RUN go get golang.org/x/crypto@latest \
+           golang.org/x/net@latest \
+           github.com/mattn/go-sqlite3@latest && \
     go mod tidy
 
-# Build binary tĩnh
+# Build binary tĩnh với CGO enabled
+# -tags osusergo,netgo: Dùng network stack của Go
+# -ldflags '-extldflags "-static"': Ép static link thư viện C (sqlite) vào binary
 RUN CGO_ENABLED=1 go build -tags osusergo,netgo -ldflags '-extldflags "-static" -s -w' -o /litestream ./cmd/litestream
 
 # [Stage 2] Final Image: Run App
