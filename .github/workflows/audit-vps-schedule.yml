@@ -2,7 +2,7 @@ name: VPS Security Audit (Enhanced)
 
 on:
   schedule:
-    - cron: '0 0 * * 0' # 00:00 Chủ nhật
+    - cron: '0 0 * * 0' # 00:00 Chủ nhật hàng tuần
   workflow_dispatch:
 
 permissions:
@@ -25,36 +25,59 @@ jobs:
                 sudo apt-get update -q && sudo apt-get install lynis rkhunter -y -q
             fi
 
-            # 2. Chạy Lynis
+            # 2. Chạy Lynis (Audit OS)
             echo ">>> Running Lynis..."
             sudo lynis audit system --quick --no-colors > lynis.log
             
-            # Trích xuất điểm số
+            # Trích xuất điểm số Lynis
             SCORE=$(grep "Hardening index" lynis.log | awk '{print $4}')
             echo "LYNIS_SCORE=$SCORE" >> $GITHUB_OUTPUT
             
-            # Trích xuất cảnh báo
-            WARNINGS=$(grep -c "\[ WARNING \]" lynis.log)
-            echo "LYNIS_WARNINGS=$WARNINGS" >> $GITHUB_OUTPUT
+            # Trích xuất cảnh báo Lynis
+            LYNIS_WARNINGS=$(grep -c "\[ WARNING \]" lynis.log)
+            echo "LYNIS_WARNINGS=$LYNIS_WARNINGS" >> $GITHUB_OUTPUT
 
-            # 3. Chạy Rootkit Hunter
+            # 3. Chạy Rootkit Hunter (Audit Rootkit)
             echo ">>> Running Rkhunter..."
-            # Update data file
             sudo rkhunter --propupd > /dev/null
-            # Chỉ in cảnh báo (Report Warnings Only)
             sudo rkhunter --check --rwo --sk
 
-            # 4. In tóm tắt ra console
+            # 4. [MỚI] Chạy Docker Bench for Security (Audit Docker Daemon)
+            echo ">>> Running Docker Bench for Security..."
+            # Pull image mới nhất để đảm bảo cập nhật các rules bảo mật
+            sudo docker pull docker/docker-bench-security:latest
+            
+            # Chạy tool với quyền truy cập vào các file cấu hình hệ thống
+            sudo docker run --rm --net host --pid host --userns host --cap-add audit_control \
+                -v /etc:/etc:ro \
+                -v /usr/bin/containerd:/usr/bin/containerd:ro \
+                -v /usr/lib/systemd:/usr/lib/systemd:ro \
+                -v /var/lib:/var/lib:ro \
+                -v /var/run/docker.sock:/var/run/docker.sock:ro \
+                --label docker_bench_security \
+                docker/docker-bench-security > docker_bench.log
+            
+            # Đếm số lượng cảnh báo [WARN] từ Docker Bench
+            DOCKER_WARNINGS=$(grep -c "\[WARN\]" docker_bench.log)
+            echo "DOCKER_WARNINGS=$DOCKER_WARNINGS" >> $GITHUB_OUTPUT
+
+            # 5. In tóm tắt ra console (Log của GitHub Actions)
             echo "========================"
             echo "HARDENING SCORE: $SCORE"
-            echo "WARNINGS: $WARNINGS"
+            echo "LYNIS WARNINGS: $LYNIS_WARNINGS"
+            echo "DOCKER WARNINGS: $DOCKER_WARNINGS"
             echo "========================"
+            
+            echo "--- Top 5 Lynis Suggestions ---"
             grep "Suggestion:" lynis.log | head -n 5
             
-            # Fail nếu điểm thấp hơn 60
+            echo "--- Top 5 Docker Bench Warnings ---"
+            grep "\[WARN\]" docker_bench.log | head -n 5
+            
+            # Fail nếu điểm Lynis thấp hơn 60 (Quality Gate)
             if [ "$SCORE" -lt 60 ]; then exit 1; fi
 
-      # 3. Gửi thông báo Discord
+      # Gửi thông báo Discord 
       - name: Notify Discord
         if: always()
         uses: tsickert/discord-webhook@v5.3.0
@@ -66,6 +89,7 @@ jobs:
           embed-title: "VPS Audit Report: ${{ steps.scan.outcome }}"
           embed-description: |
             **Hardening Score:** `${{ steps.scan.outputs.LYNIS_SCORE }}/100`
-            **Warnings:** `${{ steps.scan.outputs.LYNIS_WARNINGS }}`
+            **Lynis Warnings:** `${{ steps.scan.outputs.LYNIS_WARNINGS }}`
+            **Docker Warnings:** `${{ steps.scan.outputs.DOCKER_WARNINGS }}`
             
             *Check Action Logs for detailed suggestions.*

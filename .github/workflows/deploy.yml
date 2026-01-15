@@ -114,7 +114,6 @@ jobs:
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
-      ####################################################
       # Bước bảo mật sau khi build xong Image    
       
       # Phân tích hiệu suất Image với Dive
