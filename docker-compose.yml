@@ -21,6 +21,14 @@ services:
         tmpfs: {mode: 01777}
     user: "101"
     read_only: true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'   # Giới hạn tối đa 50% của 1 core CPU
+          memory: 128M   # Giới hạn tối đa 128MB RAM
+        reservations:
+          cpus: '0.10'
+          memory: 64M
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost/"]
       interval: 30s
