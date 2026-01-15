@@ -1,0 +1,6 @@
+dbs:
+  - path: /data/app.db
+    replicas:
+      - url: s3://wanderingtomes-db-backup/production.db
+        # Sync mỗi 10s để tiết kiệm chi phí request
+        sync-interval: 10s

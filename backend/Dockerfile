@@ -6,6 +6,11 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
+# Cài đặt Litestream
+ADD https://github.com/benbjohnson/litestream/releases/download/v0.3.13/litestream-v0.3.13-linux-amd64-static.tar.gz /tmp/litestream.tar.gz
+RUN tar -C /usr/local/bin -xzf /tmp/litestream.tar.gz && \
+    chmod +x /usr/local/bin/litestream
+
 # Tạo User & Thư mục Data TRƯỚC
 RUN mkdir /data && \
     adduser -D -u 1001 pythonuser && \
@@ -23,6 +28,9 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
 # giúp giảm dung lượng vì không cần chạy chown -R /app sau đó
 COPY --chown=1001:1001 main.py .
 
+# Copy file cấu hình Litestream
+COPY litestream.yml /etc/litestream.yml
+
 # Debug dependency
 RUN pip install pipdeptree && \
     echo "=== CHECK VERSION ===" && \
@@ -36,4 +44,4 @@ USER 1001
 HEALTHCHECK --interval=30s --timeout=3s \
   CMD curl -f http://localhost:8000/ || exit 1
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["litestream", "replicate", "-exec", "uvicorn main:app --host 0.0.0.0 --port 8000"]
