@@ -46,9 +46,10 @@ jobs:
         uses: bridgecrewio/checkov-action@master
         with:
           directory: '.'
-          framework: dockerfile,docker_compose,github_actions
-          soft_fail: true  
-          quiet: true      
+          soft_fail: true
+          quiet: true
+          output_format: cli,sarif
+          output_file_path: console,results.sarif
 
       # 3. Quét Logic Code Python bằng Bandit (Dùng CLI trực tiếp)
       - name: Python Logic Scan (Bandit)
