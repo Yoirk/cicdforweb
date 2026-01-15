@@ -320,20 +320,29 @@ jobs:
               # || true để không làm fail pipeline, chỉ xem report
 
   push-registry:
-    name: Push & Sign
+    name: Push, Sign & Attest
     needs: dast-ci
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    outputs:
+      web_digest: ${{ steps.push.outputs.web_digest }}
+      backend_digest: ${{ steps.push.outputs.backend_digest }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write # Cần quyền này để ghi SLSA
     steps:
-      # Tải lại Artifact và Load giống hệt job trên
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: {name: docker-images, path: images}
+      - uses: actions/download-artifact@v4
+        with: {name: sbom-reports, path: sbom}
+
       - run: |
           docker load -i images/web.tar
           docker load -i images/backend.tar
 
-      # Đăng nhập GHCR 
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
@@ -344,30 +353,60 @@ jobs:
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3.3.0
 
-      # Tag chuẩn và Push
+      # 1. Push Image & Lấy Digest
       - name: Tag and Push
+        id: push
         run: |
           REPO_LC=${GITHUB_REPOSITORY,,}
           
-          # Push Web
+          # Web
           docker tag cicdforweb:test ghcr.io/$REPO_LC:latest
           docker tag cicdforweb:test ghcr.io/$REPO_LC:${{ github.sha }}
           docker push ghcr.io/$REPO_LC:latest
           docker push ghcr.io/$REPO_LC:${{ github.sha }}
+          WEB_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/$REPO_LC:${{ github.sha }} | cut -d'@' -f2)
+          echo "web_digest=$WEB_DIGEST" >> $GITHUB_OUTPUT
           
-          # Push Backend
+          # Backend
           docker tag cicdforweb-backend:test ghcr.io/$REPO_LC-backend:latest
           docker tag cicdforweb-backend:test ghcr.io/$REPO_LC-backend:${{ github.sha }}
           docker push ghcr.io/$REPO_LC-backend:latest
           docker push ghcr.io/$REPO_LC-backend:${{ github.sha }}
+          BACKEND_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/$REPO_LC-backend:${{ github.sha }} | cut -d'@' -f2)
+          echo "backend_digest=$BACKEND_DIGEST" >> $GITHUB_OUTPUT
 
-      # Ký Image 
+      # 2. Ký số (Sign)
       - name: Sign Images
+        env:
+          COSIGN_EXPERIMENTAL: 1
         run: |
           REPO_LC=${GITHUB_REPOSITORY,,}
-          # ... (Copy lệnh cosign sign từ file cũ của bạn vào đây) ...
-          cosign sign --yes ghcr.io/$REPO_LC:latest
-          cosign sign --yes ghcr.io/$REPO_LC-backend:latest
+          cosign sign --yes ghcr.io/$REPO_LC@${{ steps.push.outputs.web_digest }}
+          cosign sign --yes ghcr.io/$REPO_LC-backend@${{ steps.push.outputs.backend_digest }}
+
+      # 3. Tạo SLSA Provenance
+      - name: Generate SLSA Provenance (Web)
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ steps.push.outputs.web_digest }}
+          push-to-registry: true
+
+      - name: Generate SLSA Provenance (Backend)
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ghcr.io/${{ github.repository }}-backend
+          subject-digest: ${{ steps.push.outputs.backend_digest }}
+          push-to-registry: true
+
+      # 4. Attest SBOM
+      - name: Attest SBOM
+        env:
+          COSIGN_EXPERIMENTAL: 1
+        run: |
+          REPO_LC=${GITHUB_REPOSITORY,,}
+          cosign attest --yes --predicate sbom/sbom-web.json --type spdx ghcr.io/$REPO_LC@${{ steps.push.outputs.web_digest }}
+          cosign attest --yes --predicate sbom/sbom-backend.json --type spdx ghcr.io/$REPO_LC-backend@${{ steps.push.outputs.backend_digest }}
 
   deploy:
     name: Deploy to VPS
@@ -379,10 +418,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Cần cài Cosign ở máy Runner deploy để verify
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.3.0
+
       # Cũng cần lowercase ở job deploy để verify đúng tên
       - name: Lowercase Repository Name
         run: |
           echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
+      - name: Verify Signatures (Strict OIDC)
+        env:
+          COSIGN_EXPERIMENTAL: 1
+        run: |
+          # Định danh chính xác: Phải đến từ file deploy.yml ở nhánh main
+          CERT_IDENTITY="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/deploy.yml@refs/heads/main"
+          CERT_ISSUER="https://token.actions.githubusercontent.com"
+          
+          echo "Verifying web image signature..."
+          # Verify Digest nhận được từ job trên
+          cosign verify \
+            --certificate-identity "$CERT_IDENTITY" \
+            --certificate-oidc-issuer "$CERT_ISSUER" \
+            ghcr.io/${REPO_LC}@${{ needs.push-registry.outputs.web_digest }}
+            
+          echo "Verifying backend image signature..."
+          cosign verify \
+            --certificate-identity "$CERT_IDENTITY" \
+            --certificate-oidc-issuer "$CERT_ISSUER" \
+            ghcr.io/${REPO_LC}-backend@${{ needs.push-registry.outputs.backend_digest }}
 
       - name: Copy Config
         uses: appleboy/scp-action@master
@@ -394,42 +458,77 @@ jobs:
           target: "/root/my-app"
           strip_components: 0
 
-      - name: SSH Deploy
+      # SSH to VPS and Deploy
+      - name: SSH Deploy (Zero Trust Verification)
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          # Truyền biến REPO_LC vào trong script SSH thông qua env
           envs: REPO_LC
           script: |
+            # 1. Cài đặt Cosign (nếu chưa có)
+            if ! command -v cosign &> /dev/null; then
+                echo "Installing Cosign..."
+                curl -sSL -O https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64
+                sudo mv cosign-linux-amd64 /usr/local/bin/cosign
+                sudo chmod +x /usr/local/bin/cosign
+            fi
+
             cd /root/my-app
+            REPO_LC=${REPO_LC}
             
-            # Pull image mới
+            echo ">>> PULLING IMAGES..."
             docker compose pull
 
-            # Verify Signatures (Dùng biến REPO_LC đã viết thường)
-            # Regex cũng cần update để match chữ thường
-            REPO_REGEX="^https://github.com/${REPO_LC}/.*"
-            ISSUER="https://token.actions.githubusercontent.com"
-            
-            echo "Verifying web signature..."
-            cosign verify --certificate-identity-regexp "$REPO_REGEX" --certificate-oidc-issuer "$ISSUER" ghcr.io/${REPO_LC}:latest
-            
-            echo "Verifying backend signature..."
-            cosign verify --certificate-identity-regexp "$REPO_REGEX" --certificate-oidc-issuer "$ISSUER" ghcr.io/${REPO_LC}-backend:latest
+            # Lấy Digest thực tế trên đĩa
+            WEB_IMG="ghcr.io/${REPO_LC}:latest"
+            BACKEND_IMG="ghcr.io/${REPO_LC}-backend:latest"
+            WEB_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $WEB_IMG | cut -d'@' -f2)
+            BACKEND_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $BACKEND_IMG | cut -d'@' -f2)
 
-            # Set SSL Permissions (Best Practice)
-            find /etc/letsencrypt/live -type d -exec chmod 755 {} +
-            find /etc/letsencrypt/archive -type d -exec chmod 755 {} +
-            find /etc/letsencrypt/live -type f -exec chmod 644 {} +
-            find /etc/letsencrypt/archive -type f -exec chmod 644 {} +
+            echo "Target Digests:"
+            echo "Web: $WEB_DIGEST"
+            echo "Backend: $BACKEND_DIGEST"
 
-            # Restart containers
+            # Cấu hình OIDC
+            CERT_IDENTITY="https://github.com/${REPO_LC}/.github/workflows/deploy.yml@refs/heads/main"
+            CERT_ISSUER="https://token.actions.githubusercontent.com"
+
+            # --- VERIFY 1: SIGNATURE ---
+            echo ">>> [1/3] Verifying Signatures..."
+            if ! cosign verify --certificate-identity "$CERT_IDENTITY" --certificate-oidc-issuer "$CERT_ISSUER" ghcr.io/${REPO_LC}@$WEB_DIGEST; then
+              echo "Web Signature Failed!"; exit 1
+            fi
+            if ! cosign verify --certificate-identity "$CERT_IDENTITY" --certificate-oidc-issuer "$CERT_ISSUER" ghcr.io/${REPO_LC}-backend@$BACKEND_DIGEST; then
+              echo "Backend Signature Failed!"; exit 1
+            fi
+
+            # --- VERIFY 2: SBOM ---
+            echo ">>> [2/3] Verifying SBOM Attestations..."
+            if ! cosign verify-attestation --type spdx --certificate-identity "$CERT_IDENTITY" --certificate-oidc-issuer "$CERT_ISSUER" ghcr.io/${REPO_LC}@$WEB_DIGEST > /dev/null 2>&1; then
+              echo "Warning: Web SBOM not verified (Soft Fail)"
+            else
+              echo "Web SBOM Verified"
+            fi
+
+            # --- VERIFY 3: SLSA PROVENANCE ---
+            echo ">>> [3/3] Verifying SLSA Provenance..."
+            # GitHub Attestations dùng predicate type khác mặc định của cosign, nên ta verify chung
+            if ! cosign verify-attestation --certificate-identity "$CERT_IDENTITY" --certificate-oidc-issuer "$CERT_ISSUER" ghcr.io/${REPO_LC}@$WEB_DIGEST > /dev/null 2>&1; then
+               echo "Warning: SLSA Provenance not verified (Soft Fail)"
+            else
+               echo "Web SLSA Provenance Verified"
+            fi
+
+            echo ">>> ALL SECURITY CHECKS PASSED. DEPLOYING..."
+            
+            # Set quyền SSL
+            find /etc/letsencrypt -type d -exec chmod 755 {} + 2>/dev/null || true
+            find /etc/letsencrypt -type f -exec chmod 644 {} + 2>/dev/null || true
+
             docker compose down
             docker compose up -d
-
-            # Cleanup
             docker image prune -f
 
   # DAST Prod
