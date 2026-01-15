@@ -2,6 +2,10 @@
 FROM golang:1.25-alpine@sha256:ac09a5f469f307e5da71e766b0bd59c9c49ea460a528cc3e6686513d64a6f1fb AS builder
 
 WORKDIR /build
+
+# Cài đặt git và build-base (gcc) để biên dịch SQLite C code
+RUN apk add --no-cache git build-base
+
 # Cài git và clone source code v0.3.13
 RUN apk add --no-cache git && \
     git clone --depth 1 --branch v0.3.13 https://github.com/benbjohnson/litestream.git .
@@ -11,7 +15,7 @@ RUN go get golang.org/x/crypto@latest golang.org/x/net@latest && \
     go mod tidy
 
 # Build binary tĩnh
-RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o /litestream ./cmd/litestream
+RUN CGO_ENABLED=1 go build -tags osusergo,netgo -ldflags '-extldflags "-static" -s -w' -o /litestream ./cmd/litestream
 
 # [Stage 2] Final Image: Run App
 FROM python:3.10-alpine@sha256:396410c739456800dd74a886783c6b77ba1121e6ca137463414b905f3a65df95
