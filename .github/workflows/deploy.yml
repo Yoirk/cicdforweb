@@ -242,6 +242,7 @@ jobs:
     name: Push & Sign
     needs: dast-ci
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
     steps:
       # Tải lại Artifact và Load giống hệt job trên
       - uses: actions/checkout@v4
@@ -391,9 +392,12 @@ jobs:
     steps:
       - name: Send Notification
         uses: tsickert/discord-webhook@v5.3.0
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
+        # Kiểm tra biến môi trường thay vì kiểm tra secret trực tiếp
+        if: env.WEBHOOK_URL != ''
         with:
           webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
-          # Nếu có job nào failure -> Màu Đỏ, ngược lại -> Màu Xanh
           embed-color: ${{ contains(needs.*.result, 'failure') && 15548997 || 5763719 }}
           
           username: DevSecOps Bot
