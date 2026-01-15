@@ -119,19 +119,19 @@ jobs:
       ####################################################
       # Bước bảo mật sau khi build xong Image    
       
-      # Kéo Dive Image để phân tích hiệu suất Image
+      # Phân tích hiệu suất Image với Dive
       - name: Pull Dive Image
         run: docker pull wagoodman/dive:latest
 
       - name: Analyze Image Efficiency (Dive) - Web
         run: |
           docker run --rm -e CI=true -v /var/run/docker.sock:/var/run/docker.sock \
-            wagoodman/dive:latest --ci --ci-lowest-efficiency 0.9 cicdforweb:test
+            wagoodman/dive:latest --ci --lowestEfficiency 0.9 cicdforweb:test
 
       - name: Analyze Image Efficiency (Dive) - Backend
         run: |
           docker run --rm -e CI=true -v /var/run/docker.sock:/var/run/docker.sock \
-            wagoodman/dive:latest --ci --ci-lowest-efficiency 0.9 cicdforweb-backend:test
+            wagoodman/dive:latest --ci --lowestEfficiency 0.9 cicdforweb-backend:test
 
       # Tạo hồ sơ thành phần cho Web Image
       - name: Generate SBOM (Web)
