@@ -379,3 +379,28 @@ jobs:
           cmd_options: '-d'
           rules_file_name: 'rules.tsv'
           artifact_name: 'zap_report_prod' 
+
+  # Discord notification
+  notify:
+    name: Discord Notification
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [security-sast, build-export, dast-ci, push-registry, deploy, dast-prod]
+    steps:
+      - name: Send Notification
+        uses: tsickert/discord-webhook@v5.3.0
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
+          # Nếu có job nào failure -> Màu Đỏ, ngược lại -> Màu Xanh
+          embed-color: ${{ contains(needs.*.result, 'failure') && 15548997 || 5763719 }}
+          
+          username: DevSecOps Bot
+          avatar-url: https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png
+          
+          embed-title: "CI/CD Status: ${{ contains(needs.*.result, 'failure') && 'FAILED' || 'SUCCESS' }}"
+          embed-description: |
+            **Project:** ${{ github.repository }}
+            **Branch:** ${{ github.ref_name }}
+            **Triggered by:** ${{ github.actor }}
+            
+            [View Run Details](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
