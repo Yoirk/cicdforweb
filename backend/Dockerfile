@@ -1,5 +1,5 @@
 # [Stage 1] Builder: Compile Litestream với latest Go để fix CVEs
-FROM golang:1.23-alpine@sha256:383395b794dffa5b53012a212365d40c8e37109a626ca30d6151c8348d380b5f AS builder
+FROM golang:1.25-alpine@sha256:ac09a5f469f307e5da71e766b0bd59c9c49ea460a528cc3e6686513d64a6f1fb AS builder
 
 WORKDIR /build
 # Cài git và clone source code v0.3.13
