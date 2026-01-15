@@ -1,54 +1,68 @@
-name: VPS Security Audit
+name: VPS Security Audit (Enhanced)
 
 on:
-  # Chạy tự động vào 00:00 Chủ Nhật hàng tuần
   schedule:
-    - cron: '0 0 * * 0'
-  # Cho phép chạy thủ công từ tab Actions để test
+    - cron: '0 0 * * 0' # 00:00 Chủ nhật
   workflow_dispatch:
 
 jobs:
   audit-vps:
     runs-on: ubuntu-latest
     steps:
-      - name: SSH and Run Lynis
+      - name: SSH and Run Security Scans
+        id: scan
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            # 1. Cài đặt tools nếu chưa có
             if ! command -v lynis &> /dev/null; then
-                echo "Installing Lynis..."
-                sudo apt-get update -q && sudo apt-get install lynis -y -q
+                sudo apt-get update -q && sudo apt-get install lynis rkhunter -y -q
             fi
 
-            echo "Running Lynis Audit..."
-            # --no-colors để log sạch sẽ dễ đọc hơn
-            sudo lynis audit system --quick --no-colors > /tmp/lynis-report.log
-
-            echo "================================================"
-            echo "HARDENING INDEX REPORT"
-            echo "================================================"
-            grep "Hardening index" /tmp/lynis-report.log
-            echo ""
-
-            echo "================================================"
-            echo "CRITICAL WARNINGS (CHI TIET)"
-            echo "================================================"
-            # Cách 1: Tìm dòng test cụ thể bị đánh dấu [ WARNING ]
-            grep "\[ WARNING \]" /tmp/lynis-report.log || echo "No inline warnings found."
+            # 2. Chạy Lynis
+            echo ">>> Running Lynis..."
+            sudo lynis audit system --quick --no-colors > lynis.log
             
-            echo "------------------------------------------------"
-            echo "WARNING SUMMARY:"
-            # Cách 2: In dòng 'Warnings (' và 5 dòng tiếp theo (-A 5) để thấy nội dung
-            grep -A 5 "Warnings (" /tmp/lynis-report.log
-            echo ""
-
-            echo "================================================"
-            echo "TOP 10 SUGGESTIONS"
-            echo "================================================"
-            # Lấy dòng Suggestion và cắt gọn để dễ đọc
-            grep "Suggestion:" /tmp/lynis-report.log | head -n 10
+            # Trích xuất điểm số
+            SCORE=$(grep "Hardening index" lynis.log | awk '{print $4}')
+            echo "LYNIS_SCORE=$SCORE" >> $GITHUB_OUTPUT
             
-            rm /tmp/lynis-report.log
+            # Trích xuất cảnh báo
+            WARNINGS=$(grep -c "\[ WARNING \]" lynis.log)
+            echo "LYNIS_WARNINGS=$WARNINGS" >> $GITHUB_OUTPUT
+
+            # 3. Chạy Rootkit Hunter
+            echo ">>> Running Rkhunter..."
+            # Update data file
+            sudo rkhunter --propupd > /dev/null
+            # Chỉ in cảnh báo (Report Warnings Only)
+            sudo rkhunter --check --rwo --sk
+
+            # 4. In tóm tắt ra console
+            echo "========================"
+            echo "HARDENING SCORE: $SCORE"
+            echo "WARNINGS: $WARNINGS"
+            echo "========================"
+            grep "Suggestion:" lynis.log | head -n 5
+            
+            # Fail nếu điểm thấp hơn 60
+            if [ "$SCORE" -lt 60 ]; then exit 1; fi
+
+      # 3. Gửi thông báo Discord
+      - name: Notify Discord
+        if: always()
+        uses: tsickert/discord-webhook@v5.3.0
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
+          username: Sentinel Bot
+          avatar-url: https://i.imgur.com/4G1jG5X.png
+          embed-color: ${{ steps.scan.outcome == 'failure' && 15548997 || 5763719 }}
+          embed-title: "VPS Audit Report: ${{ steps.scan.outcome }}"
+          embed-description: |
+            **Hardening Score:** `${{ steps.scan.outputs.LYNIS_SCORE }}/100`
+            **Warnings:** `${{ steps.scan.outputs.LYNIS_WARNINGS }}`
+            
+            *Check Action Logs for detailed suggestions.*
