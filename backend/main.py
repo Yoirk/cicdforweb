@@ -18,6 +18,12 @@ pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 def get_db():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    
+    # Bật Write-Ahead Logging (WAL) để tăng tốc độ đồng thời
+    conn.execute('PRAGMA journal_mode=WAL')
+    # Giảm rủi ro corrupt file khi mất điện đột ngột
+    conn.execute('PRAGMA synchronous=NORMAL')
+    
     return conn
 
 # Init DB
