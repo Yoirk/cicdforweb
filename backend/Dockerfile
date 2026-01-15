@@ -1,5 +1,5 @@
 # 1. Chọn Base Image    
-FROM python:3.10-alpine@sha256:396410c739456800dd74a886783c6b77ba1121e6ca137463414b905f3a65df95
+FROM python@sha256:396410c739456800dd74a886783c6b77ba1121e6ca137463414b905f3a65df95
 
 # Setup môi trường
 WORKDIR /app
