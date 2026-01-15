@@ -1,0 +1,28 @@
+version: 2
+updates:
+  # 1. QUẢN LÝ DOCKER BASE IMAGES
+  # Mục tiêu: Tự động update image 'python:...' và 'nginx:...'
+
+  # Quét Dockerfile ở thư mục gốc (cho Web Nginx)
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"      
+      day: "saturday"         
+    open-pull-requests-limit: 5 
+
+  # Quét Dockerfile ở thư mục backend (cho Python API)
+  - package-ecosystem: "docker"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "saturday"
+
+  # 2. QUẢN LÝ THƯ VIỆN PYTHON (PIP)
+  # Mục tiêu: Tự động update fastapi, uvicorn... trong requirements.txt
+  
+  - package-ecosystem: "pip"
+    directory: "/backend"     
+    schedule:
+      interval: "daily"       
+    open-pull-requests-limit: 10
