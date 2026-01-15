@@ -19,5 +19,8 @@ EXPOSE 80 443
 # 6. Chạy với user non-root 
 USER 101
 
+HEALTHCHECK --interval=30s --timeout=3s \
+  CMD curl -f http://localhost:80/ || exit 1
+  
 # 7. Start Nginx
 CMD ["nginx", "-g", "daemon off;"]

@@ -3,8 +3,14 @@ name: DevSecOps Microservices Pipeline
 on:
   push:
     branches: [ "main" ]
+    paths-ignore:
+      - '.github/workflows/audit-vps-schedule.yml'
+      - 'README.md'
   pull_request:
     branches: [ "main" ]
+    paths-ignore:
+      - '.github/workflows/audit-vps-schedule.yml'
+      - 'README.md'
 
 env:
   REGISTRY: ghcr.io
@@ -114,7 +120,6 @@ jobs:
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
-      ####################################################
       # Bước bảo mật sau khi build xong Image    
       
       # Phân tích hiệu suất Image với Dive
@@ -264,6 +269,37 @@ jobs:
 
         - name: Wait for App
           run: sleep 30
+
+        - name: Verify Rate Limit (Security Unit Test)
+          run: |
+            # 1. Cài đặt Apache Benchmark
+            sudo apt-get update && sudo apt-get install -y apache2-utils
+
+            # 2. Chạy Stress Test
+            # -n 50: Tổng 50 requests
+            # -c 10: 10 request cùng lúc (Concurrency)
+            # -v 2: Verbosity level (để debug nếu cần)
+            echo ">>> Sending 50 requests to http://localhost/..."
+            ab -n 50 -c 10 http://localhost/ > ab_result.txt 2>&1
+            
+            # In kết quả ra màn hình để review
+            cat ab_result.txt
+
+            # 3. Kiểm tra kết quả (Assert)
+            # Logic: Chúng ta MUỐN thấy lỗi 503 (Non-2xx responses).
+            # Nếu file kết quả có dòng "Non-2xx responses", nghĩa là Rate Limit CÓ hoạt động.
+            if grep -q "Non-2xx responses" ab_result.txt; then
+              echo "SUCCESS: Rate Limit is WORKING. Some requests were blocked as expected."
+              
+              # Đếm số lượng bị chặn để chắc chắn
+              BLOCKED_COUNT=$(grep "Non-2xx responses" ab_result.txt | awk '{print $3}')
+              echo "Blocked Requests: $BLOCKED_COUNT/50"
+              
+            else
+              echo "FAILURE: Rate Limit is NOT working. All 50 requests passed!"
+              echo "Check nginx/default.conf configuration."
+              exit 1 # Fail pipeline ngay lập tức
+            fi
 
         # QUÉT ZAP (Trỏ vào file vừa tạo)
         - name: ZAP Baseline Scan
