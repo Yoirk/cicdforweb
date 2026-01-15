@@ -461,12 +461,16 @@ jobs:
       # SSH to VPS and Deploy
       - name: SSH Deploy (Zero Trust Verification)
         uses: appleboy/ssh-action@master
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          # Truyền thêm GITHUB_REPOSITORY chứa tên gốc
-          envs: REPO_LC,GITHUB_REPOSITORY
+          # Truyền thêm biến cần thiết
+          envs: REPO_LC,GITHUB_REPOSITORY,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY
+
           script: |
             # 1. Cài đặt Cosign 
             if ! command -v cosign &> /dev/null; then
@@ -477,6 +481,12 @@ jobs:
             fi
 
             cd /root/my-app
+
+            # Tạo file .env chứa Key trên VPS
+            echo "Generating .env file..."
+            echo "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" > .env
+            echo "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY" >> .env
+
             # REPO_LC (chữ thường) dùng cho Docker Image
             REPO_LC=${REPO_LC} 
             

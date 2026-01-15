@@ -48,6 +48,13 @@ services:
       - /tmp
     environment:
       - SECRET_KEY=thay_doi_khi_len_prod
+      
+      # Map key từ file .env vào biến mà Litestream cần
+      - LITESTREAM_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - LITESTREAM_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      
+      # Khai báo Region
+      - AWS_REGION=ap-southeast-1
     user: "1001"
     read_only: true
     deploy:
