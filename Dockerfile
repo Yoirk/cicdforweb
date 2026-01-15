@@ -5,24 +5,19 @@ FROM nginx:1.26-alpine@sha256:1eadbb07820339e8bbfed18c771691970baee292ec4ab2558f
 LABEL maintainer="yoirk"
 
 # 3. Vá lỗ hổng bảo mật (CVE) & Xóa config mặc định
-# Thêm lệnh apk upgrade để update libpng, libxml2 và các gói khác
 RUN apk upgrade --no-cache && \
     rm /etc/nginx/conf.d/default.conf
 
-# 4. Copy file config vào trong Image
-COPY nginx/default.conf /etc/nginx/conf.d/default.conf
+# 4. Copy config & source code 
+# Dùng --chown để set quyền ngay khi copy, không tạo thêm layer thừa
+COPY --chown=101:101 nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY --chown=101:101 html /usr/share/nginx/html
 
-# 5. Copy mã nguồn Web vào trong Image
-COPY html /usr/share/nginx/html
-
-# 6. Phân quyền lại cho user nginx (UID 101)
-RUN chown -R 101:101 /usr/share/nginx/html && \
-    chown -R 101:101 /etc/nginx/conf.d/default.conf
-
-# 7. Expose port
+# 5. Expose port
 EXPOSE 80 443
 
+# 6. Chạy với user non-root 
 USER 101
 
-# 8. Start Nginx
+# 7. Start Nginx
 CMD ["nginx", "-g", "daemon off;"]
