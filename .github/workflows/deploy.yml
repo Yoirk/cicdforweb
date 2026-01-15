@@ -62,19 +62,43 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      # Build Docker Image (Tag tạm là :test)
-      - name: Build Images
-        run: |
-          docker build -t cicdforweb:test .
-          docker build -t cicdforweb-backend:test ./backend
+      # 1. Cài đặt Docker Buildx 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 2. Build Web Image (Có Cache)
+      - name: Build and Load Web Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          tags: cicdforweb:test
+          load: true               # Load image vào Docker Daemon để bước sau dùng được
+          cache-from: type=gha     # Lấy cache từ GitHub Actions
+          cache-to: type=gha,mode=max # Lưu cache vào GitHub Actions (mode=max lưu cả layer trung gian)
+
+      # 3. Build Backend Image (Có Cache)
+      - name: Build and Load Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          tags: cicdforweb-backend:test
+          load: true               
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      ####################################################
+      # Bước bảo mật sau khi build xong Image    
 
       # Tạo hồ sơ thành phần cho Web Image
       - name: Generate SBOM (Web)
         uses: anchore/sbom-action@v0
         with:
           image: cicdforweb:test
-          format: cyclonedx-json       # Định dạng CycloneDX
-          output-file: sbom-web.json   # Tên file xuất ra
+          format: cyclonedx-json       
+          output-file: sbom-web.json   
+          upload-artifact: false
 
       # Tạo hồ sơ thành phần cho Backend Image
       - name: Generate SBOM (Backend)
@@ -83,6 +107,7 @@ jobs:
           image: cicdforweb-backend:test
           format: cyclonedx-json
           output-file: sbom-backend.json
+          upload-artifact: false
 
       # Quét ngay lập tức sau khi build. Nếu lỗi -> Dừng pipeline luôn.
       - name: Trivy Scan Image (Web)
