@@ -28,7 +28,6 @@ jobs:
         with:
           scan-type: 'fs'
           scan-ref: '.'
-          trivy-config: trivy.yaml
           scanners: 'secret'          
           exit-code: '1'
 
@@ -247,6 +246,17 @@ jobs:
             rules_file_name: 'rules.tsv' # File này giờ được tạo bởi lệnh trên
             artifact_name: 'zap_report_ci'
 
+        - name: API Contract & Fuzz Testing
+          run: |
+            pip install schemathesis
+            # --checks all: Kiểm tra mọi lỗi (500, schema compliance, v.v.)
+            # --hypothesis-max-examples 10: Test nhẹ 10 case mỗi endpoint
+            st run http://localhost:8000/openapi.json \
+              --checks all \
+              --hypothesis-max-examples 10 \
+              --report-junit fuzz_report.xml || true 
+              # || true để không làm fail pipeline, chỉ xem report
+
   push-registry:
     name: Push & Sign
     needs: dast-ci
@@ -391,6 +401,14 @@ jobs:
           cmd_options: '-d'
           rules_file_name: 'rules.tsv'
           artifact_name: 'zap_report_prod' 
+
+      - name: SSL/TLS Hardening Scan
+        # Chạy container testssl.sh quét website
+        run: |
+          docker run --rm -t drwetter/testssl.sh \
+            --severity HIGH \
+            --fast \
+            https://wanderingtomes.site
 
   # Discord notification
   notify:
