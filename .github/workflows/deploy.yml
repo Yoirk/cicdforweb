@@ -68,6 +68,22 @@ jobs:
           docker build -t cicdforweb:test .
           docker build -t cicdforweb-backend:test ./backend
 
+      # Tạo hồ sơ thành phần cho Web Image
+      - name: Generate SBOM (Web)
+        uses: anchore/sbom-action@v0
+        with:
+          image: cicdforweb:test
+          format: cyclonedx-json       # Định dạng CycloneDX
+          output-file: sbom-web.json   # Tên file xuất ra
+
+      # Tạo hồ sơ thành phần cho Backend Image
+      - name: Generate SBOM (Backend)
+        uses: anchore/sbom-action@v0
+        with:
+          image: cicdforweb-backend:test
+          format: cyclonedx-json
+          output-file: sbom-backend.json
+
       # Quét ngay lập tức sau khi build. Nếu lỗi -> Dừng pipeline luôn.
       - name: Trivy Scan Image (Web)
         uses: aquasecurity/trivy-action@0.29.0
@@ -101,6 +117,14 @@ jobs:
           name: docker-images
           path: images/
           retention-days: 1
+
+      # Để bạn có thể tải về xem hoặc audit sau này
+      - name: Upload SBOM Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-reports
+          path: ./*.json        # Upload tất cả file .json (sbom-web.json, sbom-backend.json)
+          retention-days: 90    
 
   dast-ci:
       name: DAST CI (Localhost)
@@ -185,6 +209,7 @@ jobs:
             allow_issue_writing: false
             cmd_options: '-d'
             rules_file_name: 'rules.tsv' # File này giờ được tạo bởi lệnh trên
+            artifact_name: 'zap_report_ci'
 
   push-registry:
     name: Push & Sign
