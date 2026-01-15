@@ -66,7 +66,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 2. Build Web Image (Có Cache + Scope riêng)
+      # 2. Build Web Image 
       - name: Build and Load Web Image
         uses: docker/build-push-action@v5
         with:
@@ -78,7 +78,7 @@ jobs:
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
 
-      # 3. Build Backend Image (Có Cache + Scope riêng)
+      # 3. Build Backend Image 
       - name: Build and Load Backend Image
         uses: docker/build-push-action@v5
         with:
