@@ -340,3 +340,266 @@ For issues or questions:
 1. Check GitHub Issues
 2. Review pipeline logs in GitHub Actions
 3. Validate configuration files against schema
+
+# Echoes in the Void
+
+A containerized FastAPI + Nginx web application for sharing thoughts, secured with a comprehensive DevSecOps pipeline.
+
+---
+
+## Overview
+
+**Zero-trust DevSecOps pipeline** with:
+- Multi-stage SAST/DAST security scanning (Trivy, OWASP ZAP, Bandit, Ruff, Gixy)
+- Container signing with Cosign and SLSA provenance
+- SBOM generation and attestation
+- Hardened containers with read-only filesystems
+- Automated deployment with signature verification
+- Weekly VPS security audits
+
+---
+
+## Architecture
+
+### Tech Stack
+- **Frontend:** Vanilla JS, Tailwind CSS, Anime.js
+- **Backend:** FastAPI, SQLite with Litestream S3 replication
+- **Web Server:** Nginx (Alpine) with TLS 1.2/1.3
+- **CI/CD:** GitHub Actions with 7-stage security gates
+- **Security:** Trivy, OWASP ZAP, Bandit, Ruff, Gixy, Docker Bench, testssl.sh
+- **Supply Chain:** Cosign, SLSA provenance, SBOM attestation
+
+### Project Structure
+```
+cicdforweb/
+├── .github/
+│   ├── dependabot.yml
+│   └── workflows/
+│       ├── deploy.yml                # Main DevSecOps pipeline
+│       └── audit-vps-schedule.yml    # Weekly VPS audit
+├── backend/
+│   ├── Dockerfile                    # Multi-stage build
+│   ├── main.py                       # FastAPI with JWT auth
+│   ├── requirements.txt
+│   └── litestream.yml                # S3 replication
+├── certs/live/wanderingtomes.site/   # Let's Encrypt SSL
+├── html/index.html                   # SPA frontend
+├── nginx/default.conf                # Hardened config
+├── docker-compose.yml
+├── Dockerfile                        # Nginx image
+└── .trivyignore
+```
+
+---
+
+## API Reference
+
+### Authentication
+- `POST /register` - Create user (Argon2 hash)
+- `POST /login` - JWT token (60min expiry)
+
+### Thoughts
+- `POST /thoughts` - Create with mood (auth required)
+- `GET /thoughts/random` - Fetch 8 random grouped by title
+- `GET /thoughts/mine` - Get created + saved (auth required)
+- `GET /thoughts/search?q=` - Search by title/content
+- `DELETE /thoughts/{id}` - Delete own (auth required)
+
+### Resonances
+- `POST /thoughts/{id}/resonate` - Toggle bookmark (auth required)
+- `GET /thoughts/{id}/resonated` - Check saved status (auth required)
+
+**Database:** SQLite with WAL at `/data/app.db`, replicated to S3 every 10s.
+
+---
+
+## Security Controls
+
+### Container Hardening
+- **Image Pinning:** SHA256 digests for Nginx, Python, Golang
+- **Non-root Users:** UID 101 (Nginx), UID 1001 (Backend)
+- **Read-only Filesystem:** All containers with `read_only: true`
+- **Tmpfs Mounts:** `/tmp` and `/var/run` in-memory
+- **Resource Limits:** 0.5 CPU, 128MB (web) / 200MB (backend)
+
+### SSL/TLS
+- **Provider:** Let's Encrypt via Certbot
+- **Protocols:** TLS 1.2/1.3 only
+- **Ciphers:** ECDHE-ECDSA/RSA + AES-GCM + ChaCha20-Poly1305
+- **OCSP Stapling:** Enabled
+- **HSTS:** 1 year with includeSubDomains
+
+### Web Security
+- **Rate Limiting:** 10 req/s per IP (burst 20)
+- **CSP:** Restrictive with CDN whitelisting
+- **Headers:** X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy
+- **Method Restrictions:** Static routes limited to GET/HEAD
+
+### SAST Pipeline
+- **TruffleHog:** Secret scanning (verified only)
+- **Trivy:** Filesystem + config (CRITICAL/HIGH)
+- **Checkov:** IaC scanning
+- **Ruff:** Python linting
+- **Gixy:** Nginx config vulnerabilities
+- **Bandit:** Python security (High severity)
+
+### DAST Pipeline
+**CI Environment:**
+- OWASP ZAP baseline (10 ignored rules)
+- Vegeta rate-limit test (50 req/s, <80% success)
+- Schemathesis API fuzzing (10 examples/endpoint)
+
+**Production:**
+- OWASP ZAP baseline (non-blocking)
+- testssl.sh TLS/SSL scan (HIGH only)
+
+### Supply Chain
+- **Cosign Signing:** Keyless with GitHub OIDC
+- **SLSA Provenance:** Build attestation (Level 2+)
+- **SBOM:** CycloneDX format, 90-day retention
+- **Verification:** Strict OIDC before deploy
+  - Identity: `https://github.com/{repo}/.github/workflows/deploy.yml@refs/heads/main`
+  - Issuer: `https://token.actions.githubusercontent.com`
+
+### Continuous Monitoring
+- **Weekly Audits:** Lynis (OS), Rkhunter (rootkit), Docker Bench (CIS)
+- **Quality Gate:** Lynis score must be ≥60
+- **Discord Notifications:** Automated reports with warning counts
+
+---
+
+## CI/CD Pipeline
+
+### 7-Stage Flow
+1. **Security SAST** (5-10 min) - TruffleHog, Trivy, Checkov, Ruff, Gixy, Bandit
+2. **Build & Export** (3-5 min) - Buildx, Dive efficiency, SBOM, Trivy image scan
+3. **DAST CI** (5-10 min) - ZAP, Vegeta, Schemathesis on localhost
+4. **Push, Sign & Attest** (2-3 min) - GHCR push, Cosign sign, SLSA provenance
+5. **Deploy** (3-5 min) - SCP configs, verify signatures, `docker compose up`
+6. **DAST Prod** (5-10 min) - ZAP + testssl.sh on live URL
+7. **Notify** (always) - Discord status summary
+
+### Triggers
+- Push/PR to `main` branch
+- Ignores: `audit-vps-schedule.yml`, `README.md`
+
+---
+
+## Quick Start
+
+### Local Development
+```bash
+docker compose build
+docker compose up -d
+docker compose logs -f
+```
+
+**Access:**
+- HTTP: `http://localhost` (redirects to HTTPS)
+- HTTPS: `https://localhost` (self-signed cert)
+- Backend: `http://backend:8000` (container network)
+
+### GitHub Secrets
+Set in **Settings → Secrets and variables → Actions:**
+
+| Secret | Description |
+|--------|-------------|
+| `VPS_HOST` | VPS IP/hostname |
+| `VPS_USER` | SSH username |
+| `SSH_PRIVATE_KEY` | Private key (PEM) |
+| `AWS_ACCESS_KEY_ID` | S3 access key |
+| `AWS_SECRET_ACCESS_KEY` | S3 secret key |
+| `DISCORD_WEBHOOK` | Notification URL |
+
+### Environment Variables
+In [`docker-compose.yml`](docker-compose.yml):
+- `SECRET_KEY` - JWT signing key
+- `AWS_ACCESS_KEY_ID` → `LITESTREAM_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY` → `LITESTREAM_SECRET_ACCESS_KEY`
+- `AWS_REGION` - Default: `ap-southeast-1`
+
+---
+
+## Troubleshooting
+
+### Pipeline Fails on Security Scan
+```bash
+# Check job logs in GitHub Actions → DevSecOps Pipeline → security-sast
+# Download SBOM artifacts to inspect dependencies
+# Add exceptions to .trivyignore with justification
+```
+
+### Deployment Signature Verification Fails
+```bash
+# On VPS, check Cosign installation
+cosign version
+
+# Verify image digest matches
+docker inspect --format='{{index .RepoDigests 0}}' <image>
+
+# Confirm CERT_IDENTITY in deploy script
+# Must match: https://github.com/{REPO}/.github/workflows/deploy.yml@refs/heads/main
+```
+
+### Rate Limit Not Working
+```bash
+# Test with Vegeta
+echo "GET http://localhost/" | vegeta attack -duration=5s -rate=50 | vegeta report
+
+# Success rate should be <80% with rate=50
+# Verify Nginx config
+docker exec web_proxy cat /etc/nginx/conf.d/default.conf | grep limit_req_zone
+```
+
+### Container Startup Fails
+```bash
+# SSH to VPS
+docker compose logs backend
+docker compose config
+ls -la /root/my-app/
+```
+
+---
+
+## Backup & Recovery
+
+### SQLite Replication
+- **Source:** `/data/app.db`
+- **S3 Bucket:** `wanderingtomes-db-backup/production.db`
+- **Interval:** 10 seconds
+- **Region:** `ap-southeast-1`
+
+### Restore
+```bash
+docker compose down
+docker run --rm -v sqlite_data:/data \
+  $(docker inspect --format='{{.Config.Image}}' python_api) \
+  litestream restore -o /data/app.db s3://wanderingtomes-db-backup/production.db
+docker compose up -d
+```
+
+---
+
+## Security Standards Applied
+
+- **OWASP DevSecOps:** Automated SAST/DAST, secrets management, supply chain controls
+- **SLSA Level 2+:** Build provenance, keyless signing, strict verification
+- **CIS Docker Benchmark:** Non-root users, read-only FS, weekly audits
+- **NIST CSF:** Identify (SBOM), Protect (hardening), Detect (scanning), Respond (notifications)
+
+### Future Work
+- GitHub OIDC for VPS access (replace SSH keys)
+- Centralized logging (ELK/Datadog)
+- Automated Certbot renewal in CI
+- Branch protection + required code reviews
+- Secrets rotation with Vault/AWS Secrets Manager
+- Per-user rate limiting with Redis
+
+---
+
+## Support
+
+1. Check [GitHub Issues](../../issues)
+2. Review [pipeline logs](../../actions)
+3. Validate configs against schema
+4. Check Discord notifications
