@@ -21,7 +21,7 @@ RUN go get golang.org/x/crypto@latest \
 RUN CGO_ENABLED=1 go build -tags osusergo,netgo -ldflags '-extldflags "-static" -s -w' -o /litestream ./cmd/litestream
 
 # [Stage 2] Final Image: Run App
-FROM python:3.10-alpine@sha256:396410c739456800dd74a886783c6b77ba1121e6ca137463414b905f3a65df95
+FROM python:3.14-alpine@sha256:7af51ebeb83610fb69d633d5c61a2efb87efa4caf66b59862d624bb6ef788345
 
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE 1
