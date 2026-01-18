@@ -357,6 +357,8 @@ jobs:
         id: push
         run: |
           REPO_LC=${GITHUB_REPOSITORY,,}
+
+          echo "repo_lc=$REPO_LC" >> $GITHUB_OUTPUT
           
           # Web
           docker tag cicdforweb:test ghcr.io/$REPO_LC:latest
@@ -377,14 +379,14 @@ jobs:
       - name: Generate SLSA Provenance (Web)
         uses: actions/attest-build-provenance@v1
         with:
-          subject-name: ghcr.io/${{ github.repository }}
+          subject-name: ghcr.io/${{ steps.push.outputs.repo_lc }} 
           subject-digest: ${{ steps.push.outputs.web_digest }}
           push-to-registry: true
 
       - name: Generate SLSA Provenance (Backend)
         uses: actions/attest-build-provenance@v1
         with:
-          subject-name: ghcr.io/${{ github.repository }}-backend
+          subject-name: ghcr.io/${{ steps.push.outputs.repo_lc }}-backend 
           subject-digest: ${{ steps.push.outputs.backend_digest }}
           push-to-registry: true
 
