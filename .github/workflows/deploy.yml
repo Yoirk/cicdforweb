@@ -449,6 +449,18 @@ jobs:
             --certificate-oidc-issuer "$CERT_ISSUER" \
             ghcr.io/${REPO_LC}-backend@${{ needs.push-registry.outputs.backend_digest }}
 
+      - name: Verify SLSA Provenance (Pre-deploy Check)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Verifying SLSA Provenance for Web..."
+          gh attestation verify oci://ghcr.io/${{ env.REPO_LC }}@${{ needs.push-registry.outputs.web_digest }} \
+            --owner ${{ github.repository_owner }}
+
+          echo "Verifying SLSA Provenance for Backend..."
+          gh attestation verify oci://ghcr.io/${{ env.REPO_LC }}-backend@${{ needs.push-registry.outputs.backend_digest }} \
+            --owner ${{ github.repository_owner }}
+
       - name: Copy Config
         uses: appleboy/scp-action@master
         with:
@@ -511,7 +523,7 @@ jobs:
             echo "Identity Expected: $CERT_IDENTITY"
 
             # --- VERIFY 1: SIGNATURE ---
-            echo ">>> [1/3] Verifying Signatures..."
+            echo ">>> [1/2] Verifying Signatures..."
             if ! cosign verify --certificate-identity "$CERT_IDENTITY" --certificate-oidc-issuer "$CERT_ISSUER" ghcr.io/${REPO_LC}@$WEB_DIGEST; then
               echo "Web Signature Failed!"; exit 1
             fi
@@ -520,25 +532,11 @@ jobs:
             fi
 
             # --- VERIFY 2: SBOM ---
-            echo ">>> [2/3] Verifying SBOM Attestations..."
+            echo ">>> [2/2] Verifying SBOM Attestations..."
             if ! cosign verify-attestation --type spdx --certificate-identity "$CERT_IDENTITY" --certificate-oidc-issuer "$CERT_ISSUER" ghcr.io/${REPO_LC}@$WEB_DIGEST > /dev/null 2>&1; then
               echo "Warning: Web SBOM not verified (Soft Fail)"
             else
               echo "Web SBOM Verified"
-            fi
-
-            # --- VERIFY 3: SLSA PROVENANCE ---
-            echo ">>> [3/3] Verifying SLSA Provenance..."
-            if ! cosign verify-attestation --type https://slsa.dev/provenance/v1 --certificate-identity "$CERT_IDENTITY" --certificate-oidc-issuer "$CERT_ISSUER" ghcr.io/${REPO_LC}@$WEB_DIGEST; then
-              echo "Warning: SLSA Provenance not verified (Soft Fail)"
-            else
-              echo "Web SLSA Provenance Verified"
-            fi
-
-            if ! cosign verify-attestation --type https://slsa.dev/provenance/v1 --certificate-identity "$CERT_IDENTITY" --certificate-oidc-issuer "$CERT_ISSUER" ghcr.io/${REPO_LC}-backend@$BACKEND_DIGEST; then
-              echo "Warning: Backend SLSA Provenance not verified (Soft Fail)"
-            else
-              echo "Backend SLSA Provenance Verified"
             fi
 
             echo ">>> ALL SECURITY CHECKS PASSED. DEPLOYING..."
