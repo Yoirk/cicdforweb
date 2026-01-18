@@ -312,12 +312,9 @@ jobs:
         - name: API Contract & Fuzz Testing
           run: |
             pip install schemathesis
-            # --checks all: Kiểm tra mọi lỗi (500, schema compliance, v.v.)
-            # --hypothesis-max-examples 10: Test nhẹ 10 case mỗi endpoint
-            # Đổi tên tham số
             st run http://localhost:8000/openapi.json \
               --checks all \
-              --max-examples 10 \  
+              --max-examples 10 \
               --report-junit fuzz_report.xml || true
 
   push-registry:
