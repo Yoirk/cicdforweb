@@ -353,10 +353,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@v3.3.0
-
-      # 1. Push Image & Lấy Digest
       - name: Tag and Push
         id: push
         run: |
@@ -378,7 +374,23 @@ jobs:
           BACKEND_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/$REPO_LC-backend:${{ github.sha }} | cut -d'@' -f2)
           echo "backend_digest=$BACKEND_DIGEST" >> $GITHUB_OUTPUT
 
-      # 2. Ký số (Sign)
+      - name: Generate SLSA Provenance (Web)
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ steps.push.outputs.web_digest }}
+          push-to-registry: true
+
+      - name: Generate SLSA Provenance (Backend)
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ghcr.io/${{ github.repository }}-backend
+          subject-digest: ${{ steps.push.outputs.backend_digest }}
+          push-to-registry: true
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.3.0
+
       - name: Sign Images
         env:
           COSIGN_EXPERIMENTAL: 1
@@ -387,29 +399,6 @@ jobs:
           cosign sign --yes ghcr.io/$REPO_LC@${{ steps.push.outputs.web_digest }}
           cosign sign --yes ghcr.io/$REPO_LC-backend@${{ steps.push.outputs.backend_digest }}
 
-      # 3. Tạo SLSA Provenance
-      - name: Generate SLSA Provenance (Web)
-        env:
-          COSIGN_EXPERIMENTAL: 1
-        run: |
-          REPO_LC=${GITHUB_REPOSITORY,,}
-          # Tạo predicate từ image và ký ngay lập tức
-          cosign attest --yes \
-            --predicate <(cosign generate-in-toto-predicate ghcr.io/$REPO_LC@${{ steps.push.outputs.web_digest }} --type slsaprovenance) \
-            --type slsaprovenance \
-            ghcr.io/$REPO_LC@${{ steps.push.outputs.web_digest }}
-
-      - name: Generate SLSA Provenance (Backend)
-        env:
-          COSIGN_EXPERIMENTAL: 1
-        run: |
-          REPO_LC=${GITHUB_REPOSITORY,,}
-          cosign attest --yes \
-            --predicate <(cosign generate-in-toto-predicate ghcr.io/$REPO_LC-backend@${{ steps.push.outputs.backend_digest }} --type slsaprovenance) \
-            --type slsaprovenance \
-            ghcr.io/$REPO_LC-backend@${{ steps.push.outputs.backend_digest }}
-
-      # 4. Attest SBOM
       - name: Attest SBOM
         env:
           COSIGN_EXPERIMENTAL: 1
@@ -538,10 +527,10 @@ jobs:
 
             # --- VERIFY 3: SLSA PROVENANCE ---
             echo ">>> [3/3] Verifying SLSA Provenance..."
-            if ! cosign verify-attestation --certificate-identity "$CERT_IDENTITY" --certificate-oidc-issuer "$CERT_ISSUER" ghcr.io/${REPO_LC}@$WEB_DIGEST > /dev/null 2>&1; then
-               echo "Warning: SLSA Provenance not verified (Soft Fail)"
+            if ! cosign verify-attestation --type https://slsa.dev/provenance/v1 --certificate-identity "$CERT_IDENTITY" --certificate-oidc-issuer "$CERT_ISSUER" ghcr.io/${REPO_LC}@$WEB_DIGEST > /dev/null 2>&1; then
+              echo "Warning: SLSA Provenance not verified (Soft Fail)"
             else
-               echo "Web SLSA Provenance Verified"
+              echo "Web SLSA Provenance Verified"
             fi
 
             echo ">>> ALL SECURITY CHECKS PASSED. DEPLOYING..."
