@@ -527,10 +527,16 @@ jobs:
 
             # --- VERIFY 3: SLSA PROVENANCE ---
             echo ">>> [3/3] Verifying SLSA Provenance..."
-            if ! cosign verify-attestation --type https://slsa.dev/provenance/v1 --certificate-identity "$CERT_IDENTITY" --certificate-oidc-issuer "$CERT_ISSUER" ghcr.io/${REPO_LC}@$WEB_DIGEST > /dev/null 2>&1; then
+            if ! cosign verify-attestation --type https://slsa.dev/provenance/v1 --certificate-identity "$CERT_IDENTITY" --certificate-oidc-issuer "$CERT_ISSUER" ghcr.io/${REPO_LC}@$WEB_DIGEST; then
               echo "Warning: SLSA Provenance not verified (Soft Fail)"
             else
               echo "Web SLSA Provenance Verified"
+            fi
+
+            if ! cosign verify-attestation --type https://slsa.dev/provenance/v1 --certificate-identity "$CERT_IDENTITY" --certificate-oidc-issuer "$CERT_ISSUER" ghcr.io/${REPO_LC}-backend@$BACKEND_DIGEST; then
+              echo "Warning: Backend SLSA Provenance not verified (Soft Fail)"
+            else
+              echo "Backend SLSA Provenance Verified"
             fi
 
             echo ">>> ALL SECURITY CHECKS PASSED. DEPLOYING..."
