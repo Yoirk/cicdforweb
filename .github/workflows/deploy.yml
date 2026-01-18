@@ -315,7 +315,7 @@ jobs:
             st run http://localhost:8000/openapi.json \
               --checks all \
               --max-examples 10 \
-              --report-junit fuzz_report.xml || true
+              --report-junit-path fuzz_report.xml || true
 
   push-registry:
     name: Push, Sign & Attest
