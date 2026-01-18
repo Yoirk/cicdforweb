@@ -277,7 +277,8 @@ jobs:
             
             echo ">>> Attacking http://localhost/ with 50 req/s (Limit is 10r/s)..."
             # Bắn 50 request/giây trong 5 giây (Tổng 250 request)
-            echo "GET http://localhost/" | ./vegeta attack -duration=5s -rate=50 > results.bin
+            # Thêm -insecure vào lệnh echo
+            echo "GET http://localhost/" | ./vegeta attack -insecure -duration=5s -rate=50 > results.bin
             
             # Xuất báo cáo text
             ./vegeta report results.bin
@@ -313,11 +314,11 @@ jobs:
             pip install schemathesis
             # --checks all: Kiểm tra mọi lỗi (500, schema compliance, v.v.)
             # --hypothesis-max-examples 10: Test nhẹ 10 case mỗi endpoint
+            # Đổi tên tham số
             st run http://localhost:8000/openapi.json \
               --checks all \
-              --hypothesis-max-examples 10 \
-              --report-junit fuzz_report.xml || true 
-              # || true để không làm fail pipeline, chỉ xem report
+              --max-examples 10 \  
+              --report-junit fuzz_report.xml || true
 
   push-registry:
     name: Push, Sign & Attest

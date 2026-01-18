@@ -42,8 +42,6 @@ with get_db() as conn:
         )
     ''')
     
-aws_secret = "AKIA1234567890FAKEKEY"
-    
 # Models
 class UserAuth(BaseModel):
     username: str
