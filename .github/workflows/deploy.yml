@@ -389,18 +389,25 @@ jobs:
 
       # 3. Tạo SLSA Provenance
       - name: Generate SLSA Provenance (Web)
-        uses: actions/attest-build-provenance@v1
-        with:
-          subject-name: ghcr.io/${{ github.repository }}
-          subject-digest: ${{ steps.push.outputs.web_digest }}
-          push-to-registry: true
+        env:
+          COSIGN_EXPERIMENTAL: 1
+        run: |
+          REPO_LC=${GITHUB_REPOSITORY,,}
+          # Tạo predicate từ image và ký ngay lập tức
+          cosign attest --yes \
+            --predicate <(cosign generate-in-toto-predicate ghcr.io/$REPO_LC@${{ steps.push.outputs.web_digest }} --type slsaprovenance) \
+            --type slsaprovenance \
+            ghcr.io/$REPO_LC@${{ steps.push.outputs.web_digest }}
 
       - name: Generate SLSA Provenance (Backend)
-        uses: actions/attest-build-provenance@v1
-        with:
-          subject-name: ghcr.io/${{ github.repository }}-backend
-          subject-digest: ${{ steps.push.outputs.backend_digest }}
-          push-to-registry: true
+        env:
+          COSIGN_EXPERIMENTAL: 1
+        run: |
+          REPO_LC=${GITHUB_REPOSITORY,,}
+          cosign attest --yes \
+            --predicate <(cosign generate-in-toto-predicate ghcr.io/$REPO_LC-backend@${{ steps.push.outputs.backend_digest }} --type slsaprovenance) \
+            --type slsaprovenance \
+            ghcr.io/$REPO_LC-backend@${{ steps.push.outputs.backend_digest }}
 
       # 4. Attest SBOM
       - name: Attest SBOM
