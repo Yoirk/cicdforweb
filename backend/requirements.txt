@@ -4,3 +4,4 @@ pydantic
 python-jose[cryptography]
 passlib[argon2]
 jaraco.context>=6.1.0
+pyasn1>=0.6.2
