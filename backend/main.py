@@ -224,11 +224,3 @@ def delete_thought(thought_id: int, token: str):
         conn.execute("DELETE FROM thoughts WHERE id=?", (thought_id,))
         conn.commit()
     return {"msg": "Deleted"}
-
-def database_config():
-    private_key = """-----BEGIN RSA PRIVATE KEY-----
-    MIIEpQIBAAKCAQEA3Tz2mr7SZiAMfQyuvBjM9Oi..giả..lập..MIIEpQIBAAKCAQEA3Tz
-    MIIEpQIBAAKCAQEA3Tz2mr7SZiAMfQyuvBjM9Oi..giả..lập..MIIEpQIBAAKCAQEA3Tz
-    -----END RSA PRIVATE KEY-----"""
-    
-    print("Config loaded")
