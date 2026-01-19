@@ -224,3 +224,8 @@ def delete_thought(thought_id: int, token: str):
         conn.execute("DELETE FROM thoughts WHERE id=?", (thought_id,))
         conn.commit()
     return {"msg": "Deleted"}
+
+def db_connect():
+    # Demo lộ secret: AWS Access Key ID
+    aws_key = "AKIA1234567890123456" 
+    print("Connecting to DB...")
