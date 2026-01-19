@@ -225,7 +225,10 @@ def delete_thought(thought_id: int, token: str):
         conn.commit()
     return {"msg": "Deleted"}
 
-def db_connect():
-    # Demo lộ secret: AWS Access Key ID
-    aws_key = "AKIA1234567890123456" 
-    print("Connecting to DB...")
+def database_config():
+    private_key = """-----BEGIN RSA PRIVATE KEY-----
+    MIIEpQIBAAKCAQEA3Tz2mr7SZiAMfQyuvBjM9Oi..giả..lập..MIIEpQIBAAKCAQEA3Tz
+    MIIEpQIBAAKCAQEA3Tz2mr7SZiAMfQyuvBjM9Oi..giả..lập..MIIEpQIBAAKCAQEA3Tz
+    -----END RSA PRIVATE KEY-----"""
+    
+    print("Config loaded")
