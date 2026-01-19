@@ -17,7 +17,7 @@ COPY --chown=101:101 html /usr/share/nginx/html
 EXPOSE 80 443
 
 # 6. Chạy với user non-root 
-USER 101
+USER root
 
 HEALTHCHECK --interval=30s --timeout=3s \
   CMD curl -f http://localhost:80/ || exit 1
